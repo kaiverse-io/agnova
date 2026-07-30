@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Per-agent runtime state: pids and logs.
+var/
+
+# Agent configs are meant to be committed, but never their secrets.
+# Anything matching these is a mistake.
+*.key
+.env

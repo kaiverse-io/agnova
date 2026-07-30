@@ -1,0 +1,15 @@
+# Which upstream build this agent runs on.
+#
+# The whole design of this runtime is renting `buzz-acp` rather than owning
+# agent logic — so *which version* we rent is the single most consequential
+# fact about the agent's behaviour. It belongs in the repo, pinned, and it
+# changes only through a reviewable diff.
+#
+# Do not edit by hand. Use:
+#   just upstream-check           what is pinned, what is available
+#   just upstream-update          move to the newest release
+#   just upstream-update v0.5.1   move to a specific ref (or roll back)
+
+repo = https://github.com/block/buzz.git
+ref = v0.5.2
+sha = 3e48f1b2365d326ee1c9582448d86a99b44ecd5d
