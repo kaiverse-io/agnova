@@ -24,24 +24,24 @@ shift 2>/dev/null || true
 
 case "$command" in
   up|down|restart|status|doctor|logs)
-    exec python3 agnova/supervise.py "$command" "$@"
+    exec python3 src/agnova/supervise.py "$command" "$@"
     ;;
   selftest)
-    exec python3 agnova/selftest.py "$@"
+    exec python3 src/agnova/selftest.py "$@"
     ;;
   test)
     exec python3 -m unittest discover -s tests -v
     ;;
   upstream-check)
-    exec python3 agnova/upstream.py check
+    exec python3 src/agnova/upstream.py check
     ;;
   upstream-update)
-    exec python3 agnova/upstream.py update "$@"
+    exec python3 src/agnova/upstream.py update "$@"
     ;;
   install)
     # The pinned commit, never upstream's default branch — see
     # agnova/upstream.lock for why that distinction matters.
-    eval "$(python3 agnova/upstream.py clone-args)"
+    eval "$(python3 src/agnova/upstream.py clone-args)"
     # `cargo install` rather than `cargo build`: it places the binary in
     # ~/.cargo/bin, which survives a sandbox reclaim, whereas a build tree under
     # /tmp does not. Measured: after a reclaim buzz-cli was still present and
@@ -53,7 +53,7 @@ case "$command" in
     # A convenience report, not part of the install. Naming no agent is a
     # perfectly reasonable way to install, so it must not fail the build that
     # just succeeded.
-    python3 agnova/supervise.py doctor "$@" || true
+    python3 src/agnova/supervise.py doctor "$@" || true
     ;;
   ""|-h|--help|help)
     sed -n "3,19p" "$0" | sed "s|^# \{0,1\}||"

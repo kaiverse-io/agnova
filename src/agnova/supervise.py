@@ -26,7 +26,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from agnova import config as agent_config  # noqa: E402
 from agnova.config import ROOT, AgentConfig  # noqa: E402
@@ -190,7 +190,7 @@ def up(cfg: AgentConfig) -> int:
             "frontdoor",
             [
                 sys.executable,
-                str(ROOT / "agnova" / "frontdoor.py"),
+                str(ROOT / "src" / "agnova" / "frontdoor.py"),
                 "--port",
                 str(cfg.frontdoor_port),
             ],
@@ -212,7 +212,7 @@ def up(cfg: AgentConfig) -> int:
         spawn(
             cfg,
             "checkpoint",
-            [sys.executable, str(ROOT / "agnova" / "checkpoint.py"), cfg.name],
+            [sys.executable, str(ROOT / "src" / "agnova" / "checkpoint.py"), cfg.name],
             dict(os.environ),
             cfg.home,
         )

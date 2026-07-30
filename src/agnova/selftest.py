@@ -22,7 +22,7 @@ import socket
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from agnova import config as agent_config  # noqa: E402
 from agnova import nostr  # noqa: E402

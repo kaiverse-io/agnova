@@ -17,7 +17,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# src/ layout: parents[2] is the repo root, where agents/ and var/ live.
+ROOT = Path(__file__).resolve().parents[2]
 AGENTS_DIR = ROOT / "agents"
 VAR_DIR = ROOT / "var"
 

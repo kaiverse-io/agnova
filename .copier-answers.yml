@@ -1,0 +1,13 @@
+_commit: v0.8.6
+_src_path: /workspace/chassis
+author_email: noreply@users.noreply.github.com
+author_name: km2411
+description: Run an AI agent as a first-class participant in a Buzz workspace.
+github_owner: km2411
+include_ts: false
+install_ai_coach: false
+license: Apache-2.0
+project_name: Agnova
+python_package_name: agnova
+python_version: '3.12'
+
