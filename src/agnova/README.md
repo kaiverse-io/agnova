@@ -83,7 +83,7 @@ agnova/
   config.py       agents/<name>.env + environment -> AgentConfig
   supervise.py    up / down / status / doctor / logs
   selftest.py     three assertions that prove the transport
-  mint-auth-tag.py  NIP-OA owner attestation (run by the owner, not the agent)
+  mint_auth_tag.py  NIP-OA owner attestation (run by the owner, not the agent)
 agents/
   <name>.env      one agent, one file. Never secrets.
 var/<name>/       pids and logs. Gitignored.

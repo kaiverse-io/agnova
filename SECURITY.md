@@ -38,7 +38,7 @@ an identity-laundering service.
   no authentication stands between a local caller and a signature.
 - **One harness per identity.** Two processes signing as the same agent produce
   duplicate messages and races on relay-side state.
-- **The owner key never belongs here.** `agnova/mint-auth-tag.py` is run by a
+- **The owner key never belongs here.** `src/agnova/mint_auth_tag.py` is run by a
   human, offline, with `BUZZ_OWNER_PRIVATE_KEY`. That key attests to *every*
   agent an owner has, so it is strictly more powerful than any single agent key.
   Placing it in a deployment environment would let anything in that environment

@@ -100,14 +100,14 @@ and potentially in a session transcript.
 ```bash
 # On your machine, from a checkout of this repo:
 BUZZ_OWNER_PRIVATE_KEY=<your secret> \
-  python3 agnova/mint-auth-tag.py --agent <agent-pubkey-hex>
+  python3 src/agnova/mint_auth_tag.py --agent <agent-pubkey-hex>
 ```
 
 Verify the tool first if you like — it checks itself against NIP-OA's published
 test vector and touches no keys of yours:
 
 ```bash
-python3 agnova/mint-auth-tag.py --selftest
+python3 src/agnova/mint_auth_tag.py --selftest
 # digest matches spec vector: True
 # owner pubkey derivation:    True
 # spec signature verifies:    True

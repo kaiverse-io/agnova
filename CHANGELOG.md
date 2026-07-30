@@ -25,7 +25,7 @@ the code that was verified running there.
   for reviewable moves and rollbacks.
 - **Selftest** (`agnova/selftest.py`) — three assertions that prove the transport
   against a live relay without spending a token.
-- **NIP-OA minting** (`agnova/mint-auth-tag.py`) — owner attestation, run offline
+- **NIP-OA minting** (`src/agnova/mint_auth_tag.py`) — owner attestation, run offline
   by a human, self-checked against the spec's published test vector.
 - 26 offline unit tests.
 

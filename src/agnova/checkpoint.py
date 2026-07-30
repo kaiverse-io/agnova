@@ -38,7 +38,11 @@ def tail(out: str) -> str:
 
 
 def run(args: list[str], cwd: Path, timeout: int = 120) -> tuple[int, str]:
-    result = subprocess.run(args, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
+    # S603: argv is built here from a fixed list of git subcommands and the
+    # operator-configured paths; nothing crosses from the network. shell=False.
+    result = subprocess.run(  # noqa: S603
+        args, cwd=str(cwd), capture_output=True, text=True, timeout=timeout
+    )
     return result.returncode, (result.stdout + result.stderr).strip()
 
 

@@ -40,7 +40,7 @@ Run this as the **owner**, with the owner's key — not the agent's:
 
 ```bash
 BUZZ_OWNER_PRIVATE_KEY=<owner secret> \
-  python3 agnova/mint-auth-tag.py --agent <agent-pubkey>
+  python3 src/agnova/mint_auth_tag.py --agent <agent-pubkey>
 ```
 
 Set the result as `BUZZ_AUTH_TAG` in the environment.

@@ -77,7 +77,8 @@ def spawn(cfg: AgentConfig, service: str, argv: list[str], env: dict[str, str], 
     handle = log.open("ab")
     handle.write(f"\n=== {service} starting {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n".encode())
     handle.flush()
-    process = subprocess.Popen(
+    # S603: argv comes from this module and the agent config, never the network.
+    process = subprocess.Popen(  # noqa: S603
         argv,
         stdout=handle,
         stderr=subprocess.STDOUT,
@@ -118,7 +119,8 @@ def buzz_acp_binary() -> str | None:
         return found
     # The documented install path is a source build; a checkout left in /tmp is
     # the common case in a fresh container, so look there before giving up.
-    for candidate in (Path("/tmp/buzz/target/release/buzz-acp"), ROOT / "vendor/buzz-acp"):
+    # S108: the documented source-build location, checked only after PATH.
+    for candidate in (Path("/tmp/buzz/target/release/buzz-acp"), ROOT / "vendor/buzz-acp"):  # noqa: S108
         if candidate.exists() and os.access(candidate, os.X_OK):
             return str(candidate)
     return None

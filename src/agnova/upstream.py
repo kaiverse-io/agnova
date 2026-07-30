@@ -25,7 +25,10 @@ import sys
 from pathlib import Path
 
 LOCK = Path(__file__).resolve().parent / "upstream.lock"
-CHECKOUT = Path("/tmp/buzz")
+# S108: a build checkout, not a secret store — it holds a public git clone and
+# is recreated by `install`. Deliberately outside the repo so a reclaimed
+# sandbox discards it rather than leaving a stale tree behind.
+CHECKOUT = Path("/tmp/buzz")  # noqa: S108
 
 GREEN, YELLOW, DIM, RESET = "\033[32m", "\033[33m", "\033[2m", "\033[0m"
 
@@ -55,8 +58,12 @@ def write_lock(repo: str, ref: str, sha: str) -> None:
 
 def remote_tags(repo: str) -> list[tuple[tuple[int, int, int], str, str]]:
     """Every release tag upstream publishes, newest last."""
-    out = subprocess.run(
-        ["git", "ls-remote", "--tags", "--refs", repo],
+    # S603/S607: `git` is resolved from PATH deliberately — pinning an absolute
+    # path would break every environment that installs it somewhere else. The
+    # only interpolated value is the repo URL from the lock file.
+    argv = ["git", "ls-remote", "--tags", "--refs", repo]  # noqa: S607
+    out = subprocess.run(  # noqa: S603
+        argv,
         capture_output=True,
         text=True,
         timeout=120,

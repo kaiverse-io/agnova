@@ -230,11 +230,14 @@ async def pipe(src: asyncio.StreamReader, dst: asyncio.StreamWriter) -> None:
             dst.write(data)
             await dst.drain()
     except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
-        pass
+        # S110 by design: the peer hung up mid-copy. That is an ordinary
+        # disconnect, not an error, and logging one per closed socket would
+        # bury the log.
+        pass  # noqa: S110
     finally:
         try:
             dst.close()
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
 
@@ -336,7 +339,7 @@ class FrontDoor:
         finally:
             try:
                 writer.close()
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
     async def handle(
@@ -384,7 +387,7 @@ class FrontDoor:
             client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
             try:
                 await client_writer.drain()
-            except Exception:
+            except Exception:  # noqa: S110 — peer already gone; nothing to report
                 pass
             client_writer.close()
             return
