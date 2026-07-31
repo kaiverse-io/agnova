@@ -14,11 +14,51 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
 # src/ layout: parents[2] is the repo root, where agents/ and var/ live.
-ROOT = Path(__file__).resolve().parents[2]
+def _workspace() -> Path:
+    """The agent workspace — where `agents/` and `var/` live.
+
+    Deliberately NOT derived from this file's location. Agnova is installed as a
+    dependency of an agent repository, not vendored inside one, so the package
+    may sit in site-packages while the agents it runs live somewhere else
+    entirely. Resolution order:
+
+      1. `AGNOVA_HOME`     — explicit, wins always
+      2. the enclosing git repository of the current directory
+      3. the current directory
+
+    Rule 2 is what makes `agnova up ben` work from anywhere inside the agent's
+    checkout, which is how it is actually invoked.
+    """
+    explicit = os.environ.get("AGNOVA_HOME", "").strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    try:
+        out = subprocess.run(
+            # S607: git is resolved from PATH on purpose — pinning an absolute
+            # path would break every machine that installs it elsewhere.
+            ["git", "rev-parse", "--show-toplevel"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return Path(out.stdout.strip()).resolve()
+    except OSError:
+        pass
+    return Path.cwd().resolve()
+
+
+#: Where the agnova package itself is installed. Used only to locate the modules
+#: the supervisor spawns as subprocesses — never to find an agent.
+PACKAGE_DIR = Path(__file__).resolve().parent
+
+ROOT = _workspace()
 AGENTS_DIR = ROOT / "agents"
 VAR_DIR = ROOT / "var"
 
@@ -69,13 +109,34 @@ class AgentConfig:
     agent_command: str
     respond_to: str
     auth_tag: str | None
+    transport: str = "auto"
     checkpoint_paths: list[str] = field(default_factory=list)
     checkpoint_interval: int = 900
     env: dict[str, str] = field(default_factory=dict, repr=False)
 
     @property
+    def uses_frontdoor(self) -> bool:
+        """Whether this host needs the transport shim at all.
+
+        The front door exists for exactly one reason: an egress proxy that
+        refuses WebSocket upgrades. On a host without one there is nothing to
+        correct, so the harness talks to the relay directly and this whole
+        component stays out of the path.
+
+        `auto` decides by looking for a proxy; `direct` and `frontdoor` force
+        the answer for hosts where the guess would be wrong.
+        """
+        if self.transport == "direct":
+            return False
+        if self.transport == "frontdoor":
+            return True
+        return bool(os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy"))
+
+    @property
     def local_relay_url(self) -> str:
-        """What the harness is pointed at — the front door, never the relay."""
+        """What the harness is pointed at — the front door, or the relay itself."""
+        if not self.uses_frontdoor:
+            return self.relay_url
         return f"ws://127.0.0.1:{self.frontdoor_port}"
 
     @property
@@ -152,6 +213,7 @@ def load(name: str | None = None) -> AgentConfig:
         agent_command=value("BUZZ_ACP_AGENT_COMMAND", "claude-agent-acp"),
         respond_to=value("BUZZ_ACP_RESPOND_TO", "owner-only"),
         auth_tag=value("BUZZ_AUTH_TAG") or None,
+        transport=value("AGNOVA_TRANSPORT", "auto").lower(),
         # Named explicitly, never inferred: a timer that commits a whole home
         # directory will eventually commit somebody's half-finished work.
         checkpoint_paths=[

@@ -63,6 +63,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+import coincurve
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from agnova import nostr  # noqa: E402
@@ -80,9 +82,10 @@ class Upstream:
 
     def __init__(self, relay_url: str, proxy_url: str | None, ca_bundle: str | None):
         parsed = urlparse(relay_url)
-        self.host = parsed.hostname
-        if not self.host:
+        host = parsed.hostname
+        if not host:
             raise ValueError(f"relay URL has no host: {relay_url!r}")
+        self.host: str = host
         # ws/wss are the same wire as http/https; the scheme only decides TLS.
         self.tls = parsed.scheme in ("wss", "https")
         self.port = parsed.port or (443 if self.tls else 80)
@@ -242,12 +245,12 @@ async def pipe(src: asyncio.StreamReader, dst: asyncio.StreamWriter) -> None:
 
 
 class FrontDoor:
-    def __init__(self, upstream: Upstream, secret, quiet: bool = False):
+    def __init__(self, upstream: Upstream, secret: coincurve.PrivateKey, quiet: bool = False):
         self.upstream = upstream
         self.secret = secret
         self.quiet = quiet
 
-    def log(self, *parts) -> None:
+    def log(self, *parts: object) -> None:
         if not self.quiet:
             print(*parts, flush=True)
 

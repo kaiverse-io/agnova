@@ -19,7 +19,9 @@ written where a default lives.
 | `BUZZ_AGENT_LABEL` | capitalised name | Display name used in logs and prompts. |
 | `BUZZ_AGENT_HOME` | repo root | Directory the harness runs in — the agent's persona, memory, skills and tools. |
 | `BUZZ_OWNER_PUBKEY` | — | The human this agent belongs to. Required when `respond-to` is `owner-only`, or every event is dropped. |
-| `BUZZ_FRONTDOOR_PORT` | `8443` | Loopback port. Give each agent its own if several share a host. |
+| `BUZZ_FRONTDOOR_PORT` | `8443` | Loopback port. Ignored in direct mode. Give each agent its own if several share a proxied host. |
+| `AGNOVA_TRANSPORT` | `auto` | `auto` \| `direct` \| `frontdoor`. `auto` uses the front door only when `HTTPS_PROXY` is set. |
+| `BUZZ_ACP_BINARY` | _(search)_ | Absolute path to an existing `buzz-acp`. Skips the source build — point it at the one inside Buzz Desktop's app bundle. Checked before `PATH`. |
 | `BUZZ_ACP_AGENT_COMMAND` | `claude-agent-acp` | ACP runtime to spawn: `claude-agent-acp`, `goose`, `codex-acp`. |
 | `BUZZ_ACP_RESPOND_TO` | `owner-only` | Author gate: `owner-only`, `allowlist`, `anyone`, `nobody`. In a shared room "addressed" still means @mentioned. |
 | `BUZZ_ACP_AGENTS` | `1` | Warm agent processes. Raise only if queue depth actually grows. |

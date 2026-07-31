@@ -22,6 +22,8 @@ import socket
 import sys
 from pathlib import Path
 
+import coincurve
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from agnova import config as agent_config  # noqa: E402
@@ -60,7 +62,7 @@ def upgrade(port: int) -> tuple[bool, str]:
     return "101" in status, f"{status} | {challenge[:60]}"
 
 
-def query(port: int, secret) -> tuple[bool, str]:
+def query(port: int, secret: coincurve.PrivateKey) -> tuple[bool, str]:
     body = json.dumps([{"kinds": [9], "limit": 1}]).encode()
     # Signed for the loopback URL on purpose: the relay rejects that outright,
     # so a 200 proves the front door replaced the token.

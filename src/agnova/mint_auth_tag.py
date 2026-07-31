@@ -70,7 +70,7 @@ VECTOR = {
 }
 
 
-def digest(agent_pubkey, conditions):
+def digest(agent_pubkey: str, conditions: str) -> bytes:
     """SHA256 of `nostr:agent-auth:<agent_pubkey>:<conditions>`.
 
     The conditions string is signed verbatim — the spec forbids reordering,
@@ -81,7 +81,7 @@ def digest(agent_pubkey, conditions):
     return hashlib.sha256(preimage).digest()
 
 
-def selftest():
+def selftest() -> int:
     v = VECTOR
     d = digest(v["agent_pubkey"], v["conditions"])
     ok_digest = d.hex() == v["digest"]
@@ -103,7 +103,7 @@ def selftest():
     return 0 if passed else 1
 
 
-def mint(agent_pubkey, conditions):
+def mint(agent_pubkey: str, conditions: str) -> int:
     secret = os.environ.get("BUZZ_OWNER_PRIVATE_KEY", "").strip()
     if not secret:
         sys.exit(

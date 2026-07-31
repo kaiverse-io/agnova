@@ -25,6 +25,7 @@ import argparse
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -67,7 +68,9 @@ def dirty(home: Path, paths: list[str]) -> bool:
     return code == 0 and bool(out.strip())
 
 
-def checkpoint_once(home: Path, paths: list[str], label: str, log=print) -> bool:
+def checkpoint_once(
+    home: Path, paths: list[str], label: str, log: Callable[..., None] = print
+) -> bool:
     """Commit and push the configured paths. Returns True if anything was saved."""
     if in_progress(home):
         log("checkpoint: a merge or rebase is in progress — skipping this tick")

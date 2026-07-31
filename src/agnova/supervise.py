@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from agnova import config as agent_config  # noqa: E402
-from agnova.config import ROOT, AgentConfig  # noqa: E402
+from agnova.config import PACKAGE_DIR, ROOT, AgentConfig  # noqa: E402
 
 GREEN, RED, YELLOW, DIM, RESET = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
 
@@ -114,6 +114,17 @@ def stop(cfg: AgentConfig, service: str) -> bool:
 
 
 def buzz_acp_binary() -> str | None:
+    # An explicit override wins, so a machine that already has the binary never
+    # has to build it. Buzz Desktop ships `buzz-acp` inside the app bundle as a
+    # Tauri sidecar; pointing at that is the fastest path on a laptop and skips
+    # the Rust toolchain entirely.
+    override = os.environ.get("BUZZ_ACP_BINARY", "").strip()
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+        return None
+
     found = shutil.which("buzz-acp")
     if found:
         return found
@@ -145,10 +156,14 @@ def doctor(cfg: AgentConfig) -> int:
         bad("buzz-acp not found — run `./agent install`")
         problems += 1
 
+    # buzz-acp publishes replies itself, over its own relay socket. buzz-cli is
+    # only the agent's *tool* surface, and only when wired up as an MCP server
+    # via BUZZ_ACP_MCP_COMMAND — which is empty by default. Verified against
+    # buzz-acp v0.5.2: an empty mcp_command registers no MCP servers at all.
     if shutil.which("buzz"):
-        ok("buzz-cli on PATH (the agent's own tool surface)")
+        ok("buzz-cli on PATH (optional — the agent's tool surface, via BUZZ_ACP_MCP_COMMAND)")
     else:
-        warn("buzz-cli not on PATH — the agent can receive but not reply")
+        warn("buzz-cli not on PATH — replies still work; the agent just has no Buzz tools")
 
     if shutil.which(cfg.agent_command):
         ok(f"agent command `{cfg.agent_command}` on PATH")
@@ -182,7 +197,9 @@ def up(cfg: AgentConfig) -> int:
         bad("buzz-acp not found — run `./agent install`")
         return 1
 
-    if running_pid(cfg, "frontdoor"):
+    if not cfg.uses_frontdoor:
+        ok(f"direct to {cfg.relay_url} — no front door needed on this host")
+    elif running_pid(cfg, "frontdoor"):
         ok("front door already up")
     else:
         env = dict(os.environ)
@@ -192,7 +209,7 @@ def up(cfg: AgentConfig) -> int:
             "frontdoor",
             [
                 sys.executable,
-                str(ROOT / "src" / "agnova" / "frontdoor.py"),
+                str(PACKAGE_DIR / "frontdoor.py"),
                 "--port",
                 str(cfg.frontdoor_port),
             ],
@@ -214,7 +231,7 @@ def up(cfg: AgentConfig) -> int:
         spawn(
             cfg,
             "checkpoint",
-            [sys.executable, str(ROOT / "src" / "agnova" / "checkpoint.py"), cfg.name],
+            [sys.executable, str(PACKAGE_DIR / "checkpoint.py"), cfg.name],
             dict(os.environ),
             cfg.home,
         )
@@ -250,7 +267,8 @@ def down(cfg: AgentConfig) -> int:
 
 def status(cfg: AgentConfig) -> int:
     live = True
-    expected = ["frontdoor", "harness"] + (["checkpoint"] if cfg.checkpoint_paths else [])
+    expected = (["frontdoor"] if cfg.uses_frontdoor else []) + ["harness"]
+    expected += ["checkpoint"] if cfg.checkpoint_paths else []
     for service in expected:
         pid = running_pid(cfg, service)
         live = live and pid is not None

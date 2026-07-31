@@ -10,15 +10,22 @@ permissions:
 
 jobs:
   ci:
-    name: CI
+    name: CI (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor and the current release. requires-python says 3.11, so 3.11
+        # has to be tested or the claim is untested.
+        python-version: ["3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
 
       - name: Install just

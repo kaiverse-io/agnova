@@ -71,13 +71,14 @@ def remote_tags(repo: str) -> list[tuple[tuple[int, int, int], str, str]]:
     if out.returncode != 0:
         raise SystemExit(f"could not reach {repo}:\n{out.stderr.strip()}")
 
-    releases = []
+    releases: list[tuple[tuple[int, int, int], str, str]] = []
     for line in out.stdout.splitlines():
         sha, _, ref = line.partition("\t")
         name = ref.removeprefix("refs/tags/")
         match = SEMVER_TAG.match(name)
         if match:
-            releases.append((tuple(int(p) for p in match.groups()), name, sha.strip()))
+            major, minor, patch = (int(p) for p in match.groups())
+            releases.append(((major, minor, patch), name, sha.strip()))
     return sorted(releases)
 
 
@@ -95,12 +96,9 @@ def check() -> int:
         print(f"{GREEN}✓{RESET} up to date")
         return 0
 
-    newer = [
-        name
-        for version, name, _ in releases
-        if SEMVER_TAG.match(lock["ref"])
-        and version > tuple(int(p) for p in SEMVER_TAG.match(lock["ref"]).groups())
-    ]
+    pinned = SEMVER_TAG.match(lock["ref"])
+    pinned_version = tuple(int(p) for p in pinned.groups()) if pinned else None
+    newer = [name for version, name, _ in releases if pinned_version and version > pinned_version]
     if newer:
         print(f"{YELLOW}!{RESET} {len(newer)} newer release(s): {', '.join(newer[-5:])}")
     else:
