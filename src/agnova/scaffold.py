@@ -10,13 +10,29 @@ What it writes:
 
     runtime.lock        which agnova this agent runs on (data, never code)
     agents/<name>.env   the agent's config — committed, never secret
-    AGENTS.md           the persona contract, read by whatever runtime runs it
+    AGENTS.md           the operating contract, read by whatever runtime runs it
     CLAUDE.md           one-line bridge so Claude Code reads AGENTS.md
     SOUL.md             who the agent is
+    PRINCIPLES.md       the owner's philosophy — governs everything below it
+    USER.md             who the owner is
     MEMORY.md           curated long-term memory
-    memory/             the daily log
+    memory/             the daily log — thoughts, as they happen
+    knowledge/          knowledge made from thoughts: structured, sourced
+    ideas/              knowledge organised into ideas, governed by PRINCIPLES.md
     skills/             what it knows how to do
     .gitignore          runtime state that must never be committed
+
+The four content layers are a pipeline, not four folders that happen to exist:
+
+    thought ──▶ knowledge ──▶ idea
+                                 ▲
+                          PRINCIPLES.md governs
+
+A thought is raw — something the owner said, wrote or handed over. Knowledge is
+what an agent makes of it: structured, sourced, connected to what is already
+there. An idea is knowledge organised into something that can be acted on, and
+what makes it a *good* idea is the owner's philosophy, not the agent's taste.
+That is why PRINCIPLES.md sits above the pipeline rather than inside it.
 
 What it does NOT write: any runtime code. An agent repository contains its
 identity, its memory and one lock file. Everything executable comes from the
@@ -132,11 +148,11 @@ BUZZ_ACP_HEARTBEAT_INTERVAL=0
 # The files that make up this agent's published identity. `agnova engram`
 # renders these into the NIP-AE core engram Buzz injects each turn, so the
 # engram is a projection of the repo rather than a second, ungoverned source.
-AGENT_ENGRAM_PATHS=SOUL.md
+AGENT_ENGRAM_PATHS=SOUL.md,PRINCIPLES.md
 
 # What must survive the machine. Named explicitly, never inferred — a timer that
 # committed the whole home would eventually commit half-finished work.
-AGENT_CHECKPOINT_PATHS=memory/,MEMORY.md
+AGENT_CHECKPOINT_PATHS=memory/,MEMORY.md,knowledge/,ideas/,PRINCIPLES.md
 AGENT_CHECKPOINT_INTERVAL=900
 """,
     )
@@ -145,16 +161,39 @@ AGENT_CHECKPOINT_INTERVAL=900
         "AGENTS.md",
         f"""# AGENTS.md — {name.capitalize()}
 
-The persona contract. Runtime-agnostic on purpose: Claude Code, goose and codex
-each look for a different file, so this is the single source and the others
-bridge to it.
+The operating contract. Runtime-agnostic on purpose: Claude Code, goose and codex
+each look for a different file, so this is the single source and the others bridge
+to it.
 
 ## Session startup
 
 1. If `memory/{today:%Y-%m-%d}.md` (today) does not exist, create it before anything else.
 2. Read `SOUL.md` — who you are.
-3. Read `MEMORY.md` — what is durably true.
-4. Read today's and yesterday's `memory/` entries for recent context.
+3. Read `PRINCIPLES.md` — what governs your judgement. Not optional; it is the
+   difference between organising well and organising to your own taste.
+4. Read `USER.md` — who you serve.
+5. Read `MEMORY.md`, then today's and yesterday's `memory/` entries.
+
+## The pipeline
+
+```
+thought ──▶ knowledge ──▶ idea
+                             ▲
+                      PRINCIPLES.md governs
+```
+
+- **Thought** — raw. Something said, written or handed over. Lands in
+  `memory/YYYY-MM-DD.md` if it happened in a session, or arrives as a file.
+- **Knowledge** — what you make of a thought: structured, sourced, connected to
+  what is already in `knowledge/`. A thought becomes knowledge when you can say
+  where it came from and what it relates to.
+- **Idea** — knowledge organised into something actionable, in `ideas/`. What
+  makes an idea *good* is the owner's philosophy, not your taste — which is why
+  `PRINCIPLES.md` sits above this and not inside it.
+
+Moving something down this pipeline is the work, not housekeeping. A thought left
+raw is a thought lost; an idea that contradicts `PRINCIPLES.md` is one you should
+say so about rather than quietly file.
 
 ## Memory
 
@@ -169,9 +208,19 @@ is yours; the runtime only persists what you wrote.
 | You want | Look in |
 |---|---|
 | Who you are | `SOUL.md` |
+| What governs judgement | `PRINCIPLES.md` |
+| Who you serve | `USER.md` |
 | Long-term memory | `MEMORY.md` |
 | A given day | `memory/YYYY-MM-DD.md` |
+| Structured knowledge | `knowledge/` |
+| Organised ideas | `ideas/` |
 | Capabilities | `skills/` |
+
+## What does not belong here
+
+Project design, specifications and source code belong to the project's own
+repository. The test is form, not subject: **if it could be implemented from, it
+is a spec** — and a spec held here goes stale and misleads.
 
 ## Runtime
 
@@ -241,6 +290,91 @@ ground for everything that happened.
 ## Done
 
 ## Open
+""",
+    )
+
+    w(
+        "USER.md",
+        """# USER.md — who this agent serves
+
+_Replace this. An agent that does not know who it works for cannot tell a good
+answer from a plausible one._
+
+- **Name:**
+- **What to call them:**
+- **Pronouns:**
+- **Timezone:**
+- **Location:**
+
+## Context
+
+- What they are working on.
+- What they care about.
+- How they like to be dealt with — and how they do not.
+
+Facts only, and only facts they gave you. Never infer a preference and record it
+as though it were stated; an invented one is applied with the same confidence as
+a real one and is much harder to notice.
+""",
+    )
+
+    w(
+        "PRINCIPLES.md",
+        """# PRINCIPLES.md — what governs judgement here
+
+_The owner's philosophy and principles. Not the agent's opinions — those go
+elsewhere. This file is the standard an idea is measured against._
+
+Replace this with what the owner actually believes. **Do not invent it.** A
+principle nobody stated is worse than no principle: it will be applied
+confidently and wrongly. Where something is unknown, leave it marked unknown and
+ask.
+
+## Principles
+
+<!-- One per heading. State it, then cite where it came from — a conversation,
+     a document, a decision. A principle without a source is a guess. -->
+
+### (example — replace)
+**Statement.** What is believed.
+**Source.** Where it was said or written.
+**In practice.** What it rules in, and what it rules out.
+
+## Open
+
+- What has not been articulated yet, and should be asked about.
+""",
+    )
+
+    w(
+        "knowledge/README.md",
+        """# knowledge/
+
+Knowledge made from thoughts. Structured, sourced, connected.
+
+A thought becomes knowledge when you can say **where it came from** and **what it
+relates to**. Until then it is raw material sitting in a daily note.
+
+Every entry carries its provenance. Knowledge whose source is unknown cannot be
+trusted later, and an agent that cannot say why it believes something is guessing
+with extra steps.
+
+This is the library. The diary is `memory/`.
+""",
+    )
+
+    w(
+        "ideas/README.md",
+        """# ideas/
+
+Knowledge organised into something that can be acted on.
+
+An idea is not a longer note. It is knowledge shaped into a claim, a plan or a
+direction — with enough structure that it can be argued with.
+
+Ideas are governed by `PRINCIPLES.md`. When one contradicts a stated principle,
+say so rather than filing it quietly: the disagreement is the useful part, and it
+usually means either the idea is wrong or a principle has changed.
 """,
     )
 
