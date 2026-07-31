@@ -114,6 +114,17 @@ def stop(cfg: AgentConfig, service: str) -> bool:
 
 
 def buzz_acp_binary() -> str | None:
+    # An explicit override wins, so a machine that already has the binary never
+    # has to build it. Buzz Desktop ships `buzz-acp` inside the app bundle as a
+    # Tauri sidecar; pointing at that is the fastest path on a laptop and skips
+    # the Rust toolchain entirely.
+    override = os.environ.get("BUZZ_ACP_BINARY", "").strip()
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.exists() and os.access(candidate, os.X_OK):
+            return str(candidate)
+        return None
+
     found = shutil.which("buzz-acp")
     if found:
         return found
