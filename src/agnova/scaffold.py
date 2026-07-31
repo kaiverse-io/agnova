@@ -129,6 +129,11 @@ AGNOVA_TRANSPORT=auto
 BUZZ_ACP_AGENTS=1
 BUZZ_ACP_HEARTBEAT_INTERVAL=0
 
+# The files that make up this agent's published identity. `agnova engram`
+# renders these into the NIP-AE core engram Buzz injects each turn, so the
+# engram is a projection of the repo rather than a second, ungoverned source.
+AGENT_ENGRAM_PATHS=SOUL.md
+
 # What must survive the machine. Named explicitly, never inferred — a timer that
 # committed the whole home would eventually commit half-finished work.
 AGENT_CHECKPOINT_PATHS=memory/,MEMORY.md

@@ -110,6 +110,7 @@ class AgentConfig:
     respond_to: str
     auth_tag: str | None
     transport: str = "auto"
+    engram_paths: list[str] = field(default_factory=list)
     checkpoint_paths: list[str] = field(default_factory=list)
     checkpoint_interval: int = 900
     env: dict[str, str] = field(default_factory=dict, repr=False)
@@ -216,6 +217,9 @@ def load(name: str | None = None) -> AgentConfig:
         transport=value("AGNOVA_TRANSPORT", "auto").lower(),
         # Named explicitly, never inferred: a timer that commits a whole home
         # directory will eventually commit somebody's half-finished work.
+        # Which files make up the agent's published identity. The runtime renders
+        # what is named here and never decides what identity is.
+        engram_paths=[p.strip() for p in value("AGENT_ENGRAM_PATHS").split(",") if p.strip()],
         checkpoint_paths=[
             p.strip() for p in value("AGENT_CHECKPOINT_PATHS").split(",") if p.strip()
         ],

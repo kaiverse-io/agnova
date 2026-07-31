@@ -352,7 +352,7 @@ def _hostwide(command: str, agent: str | None) -> int | None:
     return None
 
 
-def _agent_command(command: str, cfg: AgentConfig, lines: int) -> int:
+def _agent_command(command: str, cfg: AgentConfig, lines: int, publish: bool = False) -> int:
     from agnova import selftest
 
     if command == "up":
@@ -368,6 +368,13 @@ def _agent_command(command: str, cfg: AgentConfig, lines: int) -> int:
         return logs(cfg, lines)
     if command == "selftest":
         selftest.run(cfg.name)
+        return 0
+    if command == "engram":
+        from agnova import engram
+
+        if publish:
+            return engram.publish(cfg)
+        print(engram.render(cfg), end="")
         return 0
     # doctor: a diagnosis is not a failure — this must never break a session start.
     doctor(cfg)
@@ -386,6 +393,7 @@ def main() -> None:
             "doctor",
             "logs",
             "selftest",
+            "engram",
             "install",
             "init",
             "runtime",
@@ -399,13 +407,18 @@ def main() -> None:
         help="agent name (see agents/*.env); for `runtime`, one of status|check|install",
     )
     parser.add_argument("--lines", type=int, default=25)
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="engram: publish to the relay instead of printing",
+    )
     args = parser.parse_args()
 
     code = _hostwide(args.command, args.agent)
     if code is not None:
         sys.exit(code)
 
-    sys.exit(_agent_command(args.command, agent_config.load(args.agent), args.lines))
+    sys.exit(_agent_command(args.command, agent_config.load(args.agent), args.lines, args.publish))
 
 
 if __name__ == "__main__":
