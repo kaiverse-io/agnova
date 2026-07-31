@@ -14,11 +14,51 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
 # src/ layout: parents[2] is the repo root, where agents/ and var/ live.
-ROOT = Path(__file__).resolve().parents[2]
+def _workspace() -> Path:
+    """The agent workspace — where `agents/` and `var/` live.
+
+    Deliberately NOT derived from this file's location. Agnova is installed as a
+    dependency of an agent repository, not vendored inside one, so the package
+    may sit in site-packages while the agents it runs live somewhere else
+    entirely. Resolution order:
+
+      1. `AGNOVA_HOME`     — explicit, wins always
+      2. the enclosing git repository of the current directory
+      3. the current directory
+
+    Rule 2 is what makes `agnova up ben` work from anywhere inside the agent's
+    checkout, which is how it is actually invoked.
+    """
+    explicit = os.environ.get("AGNOVA_HOME", "").strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    try:
+        out = subprocess.run(
+            # S607: git is resolved from PATH on purpose — pinning an absolute
+            # path would break every machine that installs it elsewhere.
+            ["git", "rev-parse", "--show-toplevel"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return Path(out.stdout.strip()).resolve()
+    except OSError:
+        pass
+    return Path.cwd().resolve()
+
+
+#: Where the agnova package itself is installed. Used only to locate the modules
+#: the supervisor spawns as subprocesses — never to find an agent.
+PACKAGE_DIR = Path(__file__).resolve().parent
+
+ROOT = _workspace()
 AGENTS_DIR = ROOT / "agents"
 VAR_DIR = ROOT / "var"
 

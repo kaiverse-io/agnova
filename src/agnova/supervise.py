@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from agnova import config as agent_config  # noqa: E402
-from agnova.config import ROOT, AgentConfig  # noqa: E402
+from agnova.config import PACKAGE_DIR, ROOT, AgentConfig  # noqa: E402
 
 GREEN, RED, YELLOW, DIM, RESET = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
 
@@ -209,7 +209,7 @@ def up(cfg: AgentConfig) -> int:
             "frontdoor",
             [
                 sys.executable,
-                str(ROOT / "src" / "agnova" / "frontdoor.py"),
+                str(PACKAGE_DIR / "frontdoor.py"),
                 "--port",
                 str(cfg.frontdoor_port),
             ],
@@ -231,7 +231,7 @@ def up(cfg: AgentConfig) -> int:
         spawn(
             cfg,
             "checkpoint",
-            [sys.executable, str(ROOT / "src" / "agnova" / "checkpoint.py"), cfg.name],
+            [sys.executable, str(PACKAGE_DIR / "checkpoint.py"), cfg.name],
             dict(os.environ),
             cfg.home,
         )
