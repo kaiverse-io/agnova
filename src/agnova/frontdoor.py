@@ -61,7 +61,7 @@ import ssl
 import struct
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 import coincurve
 
@@ -89,8 +89,33 @@ class Upstream:
         # ws/wss are the same wire as http/https; the scheme only decides TLS.
         self.tls = parsed.scheme in ("wss", "https")
         self.port = parsed.port or (443 if self.tls else 80)
-        self.proxy = urlparse(proxy_url) if proxy_url else None
+        # Whether a proxy is in play is fixed at construction; *which* proxy is
+        # not. See `proxy`.
+        self._proxy_configured = bool(proxy_url)
+        self._proxy_override = urlparse(proxy_url) if proxy_url else None
         self.ca_bundle = ca_bundle
+
+    @property
+    def proxy(self) -> ParseResult | None:
+        """The proxy to tunnel through, resolved per connection — never cached.
+
+        The agent proxy in a Claude Code sandbox is a listening socket owned by
+        the `claude` process, on a randomly assigned loopback port. It dies with
+        that process and the next session gets a different port. A front door
+        that resolved the proxy once at startup kept dialling a port that no
+        longer existed, answered `502` to every reconnect, and took the agent
+        down with it — twice, in two days.
+
+        Re-reading the environment on each attempt means a front door started by
+        one session is picked up by the next, and the agent recovers on its own
+        instead of needing a restart it cannot ask for.
+        """
+        if not self._proxy_configured:
+            return None
+        live = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        if live:
+            return urlparse(live)
+        return self._proxy_override
 
     @property
     def origin(self) -> str:
@@ -449,6 +474,8 @@ def build(
         raise SystemExit("BUZZ_PRIVATE_KEY is not set")
     upstream = Upstream(
         relay_url,
+        # Records that a proxy is configured. The live value is re-read on every
+        # connection — see Upstream.proxy.
         os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy"),
         ca_bundle(),
     )
