@@ -328,10 +328,23 @@ def run_step(cmd: list[str]) -> None:
 #: agent. They must dispatch before a config is loaded — `install` on a fresh
 #: box has no agent configured yet, and requiring one would be a chicken-and-egg.
 def _hostwide(command: str, agent: str | None) -> int | None:
-    from agnova import upstream
+    from agnova import runtime, upstream
 
     if command == "install":
         return install()
+    if command == "runtime":
+        # `agnova runtime <status|check|install>` — the agent's own agnova pin.
+        # The subcommand rides in the `agent` slot; these never take an agent.
+        return {"status": runtime.status, "check": runtime.check, "install": runtime.install}.get(
+            agent or "status", runtime.status
+        )()
+    if command == "init":
+        from agnova.config import ROOT
+        from agnova.scaffold import init
+
+        if not agent:
+            raise SystemExit("agnova init <name> — name the agent")
+        return init(agent, ROOT)
     if command == "upstream-check":
         return upstream.check()
     if command == "upstream-update":
@@ -374,11 +387,17 @@ def main() -> None:
             "logs",
             "selftest",
             "install",
+            "init",
+            "runtime",
             "upstream-check",
             "upstream-update",
         ],
     )
-    parser.add_argument("agent", nargs="?", help="agent name (see agents/*.env)")
+    parser.add_argument(
+        "agent",
+        nargs="?",
+        help="agent name (see agents/*.env); for `runtime`, one of status|check|install",
+    )
     parser.add_argument("--lines", type=int, default=25)
     args = parser.parse_args()
 
