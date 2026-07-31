@@ -23,19 +23,30 @@ set -euo pipefail
 
 # Build the pinned upstream. The version comes from agnova/upstream.lock in
 # the repo, never from upstream's default branch — see that file for why.
-cd "$(git rev-parse --show-toplevel 2>/dev/null || echo /home/user/agent-workspace)"
-eval "$(python3 agnova/upstream.py clone-args)"
-cargo install --path /tmp/buzz/crates/buzz-cli --locked
-cargo build --release --manifest-path /tmp/buzz/Cargo.toml -p buzz-acp
+cd "$(git rev-parse --show-toplevel)"
+eval "$(python3 -m agnova.upstream clone-args)"
+
+# `cargo install`, never `cargo build`: it places the binary in ~/.cargo/bin,
+# which survives a sandbox reclaim. A build tree under /tmp does not — measured.
+cargo install --path /tmp/buzz/crates/buzz-acp --locked
 
 # The ACP adapter for Claude Code.
 npm install -g @agentclientprotocol/claude-agent-acp
 
 # Signing, for the front door.
 pip install --quiet coincurve
+
+# Optional: the agent's Buzz *tool* surface. Only needed if you set
+# BUZZ_ACP_MCP_COMMAND — replies do not go through it. Costs ~2 min to build.
+# cargo install --path /tmp/buzz/crates/buzz-cli --locked
 ```
 
 This does **not** start the agent — see step 6.
+
+`buzz-cli` is deliberately commented out. `buzz-acp` publishes replies over its
+own relay socket; `buzz-cli` is an MCP server the agent may call as a *tool*, and
+only when `BUZZ_ACP_MCP_COMMAND` names it — which is empty by default. Installing
+it unconditionally builds a Rust crate that most agents never invoke.
 
 ---
 

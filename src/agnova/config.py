@@ -69,13 +69,34 @@ class AgentConfig:
     agent_command: str
     respond_to: str
     auth_tag: str | None
+    transport: str = "auto"
     checkpoint_paths: list[str] = field(default_factory=list)
     checkpoint_interval: int = 900
     env: dict[str, str] = field(default_factory=dict, repr=False)
 
     @property
+    def uses_frontdoor(self) -> bool:
+        """Whether this host needs the transport shim at all.
+
+        The front door exists for exactly one reason: an egress proxy that
+        refuses WebSocket upgrades. On a host without one there is nothing to
+        correct, so the harness talks to the relay directly and this whole
+        component stays out of the path.
+
+        `auto` decides by looking for a proxy; `direct` and `frontdoor` force
+        the answer for hosts where the guess would be wrong.
+        """
+        if self.transport == "direct":
+            return False
+        if self.transport == "frontdoor":
+            return True
+        return bool(os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy"))
+
+    @property
     def local_relay_url(self) -> str:
-        """What the harness is pointed at — the front door, never the relay."""
+        """What the harness is pointed at — the front door, or the relay itself."""
+        if not self.uses_frontdoor:
+            return self.relay_url
         return f"ws://127.0.0.1:{self.frontdoor_port}"
 
     @property
@@ -152,6 +173,7 @@ def load(name: str | None = None) -> AgentConfig:
         agent_command=value("BUZZ_ACP_AGENT_COMMAND", "claude-agent-acp"),
         respond_to=value("BUZZ_ACP_RESPOND_TO", "owner-only"),
         auth_tag=value("BUZZ_AUTH_TAG") or None,
+        transport=value("AGNOVA_TRANSPORT", "auto").lower(),
         # Named explicitly, never inferred: a timer that commits a whole home
         # directory will eventually commit somebody's half-finished work.
         checkpoint_paths=[

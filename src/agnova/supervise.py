@@ -145,10 +145,14 @@ def doctor(cfg: AgentConfig) -> int:
         bad("buzz-acp not found — run `./agent install`")
         problems += 1
 
+    # buzz-acp publishes replies itself, over its own relay socket. buzz-cli is
+    # only the agent's *tool* surface, and only when wired up as an MCP server
+    # via BUZZ_ACP_MCP_COMMAND — which is empty by default. Verified against
+    # buzz-acp v0.5.2: an empty mcp_command registers no MCP servers at all.
     if shutil.which("buzz"):
-        ok("buzz-cli on PATH (the agent's own tool surface)")
+        ok("buzz-cli on PATH (optional — the agent's tool surface, via BUZZ_ACP_MCP_COMMAND)")
     else:
-        warn("buzz-cli not on PATH — the agent can receive but not reply")
+        warn("buzz-cli not on PATH — replies still work; the agent just has no Buzz tools")
 
     if shutil.which(cfg.agent_command):
         ok(f"agent command `{cfg.agent_command}` on PATH")
@@ -182,7 +186,9 @@ def up(cfg: AgentConfig) -> int:
         bad("buzz-acp not found — run `./agent install`")
         return 1
 
-    if running_pid(cfg, "frontdoor"):
+    if not cfg.uses_frontdoor:
+        ok(f"direct to {cfg.relay_url} — no front door needed on this host")
+    elif running_pid(cfg, "frontdoor"):
         ok("front door already up")
     else:
         env = dict(os.environ)
@@ -250,7 +256,8 @@ def down(cfg: AgentConfig) -> int:
 
 def status(cfg: AgentConfig) -> int:
     live = True
-    expected = ["frontdoor", "harness"] + (["checkpoint"] if cfg.checkpoint_paths else [])
+    expected = (["frontdoor"] if cfg.uses_frontdoor else []) + ["harness"]
+    expected += ["checkpoint"] if cfg.checkpoint_paths else []
     for service in expected:
         pid = running_pid(cfg, service)
         live = live and pid is not None

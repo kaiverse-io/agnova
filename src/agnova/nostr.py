@@ -13,6 +13,7 @@ import hashlib
 import json
 import time
 from base64 import b64encode
+from typing import Any
 
 import coincurve
 
@@ -109,9 +110,13 @@ def public_key_hex(secret: coincurve.PrivateKey) -> str:
     return secret.public_key_xonly.format().hex()
 
 
-def sign_event(secret: coincurve.PrivateKey, kind: int, tags: list, content: str = "") -> dict:
+def sign_event(
+    secret: coincurve.PrivateKey, kind: int, tags: list[list[str]], content: str = ""
+) -> dict[str, Any]:
     """Build and sign a Nostr event (NIP-01 id, BIP-340 signature)."""
-    event = {
+    # Annotated rather than inferred: the id and sig are added below, so an
+    # inferred dict[str, object] would make every later read untyped.
+    event: dict[str, Any] = {
         "pubkey": public_key_hex(secret),
         "created_at": int(time.time()),
         "kind": kind,
