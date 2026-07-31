@@ -1,66 +1,15 @@
 #!/usr/bin/env bash
-# Entry point for the agent runtime. No dependencies beyond Python 3.
+# Thin wrapper for running agnova straight from a checkout, without installing.
 #
-# `just` is the nicer surface, but it is not installed in every container and a
-# runtime whose first command fails on a fresh machine is not a runtime. This
-# script is the real interface; the justfile delegates to it.
+# The real interface is the `agnova` console script (`pip install agnova`), which
+# is what an agent repository consuming this as a dependency will have. This
+# script exists only so a clone can be exercised in place; it deliberately adds
+# no behaviour of its own, because two entry points that disagree is worse than
+# one that is slightly less convenient.
 #
-#   bin/agnova up [name]          start front door + harness (idempotent)
-#   bin/agnova down [name]        stop both
-#   bin/agnova restart [name]
-#   bin/agnova status [name]      exit 0 only when both are running
-#   bin/agnova doctor [name]      diagnose, change nothing, never fail
-#   bin/agnova logs [name]
-#   bin/agnova selftest [name]    prove the transport without spending a token
-#   bin/agnova test               unit tests: offline, no keys, no relay
-#   bin/agnova install            build the pinned upstream, install the adapter
-#   bin/agnova upstream-check     what is pinned, what is available
-#   bin/agnova upstream-update [ref]
+#   bin/agnova up|down|restart|status|doctor|logs|selftest [agent]
+#   bin/agnova install                 build the pinned upstream
+#   bin/agnova upstream-check|upstream-update [ref]
 set -euo pipefail
-
 cd "$(dirname "$0")/.."
-command="${1:-}"
-shift 2>/dev/null || true
-
-case "$command" in
-  up|down|restart|status|doctor|logs)
-    exec python3 src/agnova/supervise.py "$command" "$@"
-    ;;
-  selftest)
-    exec python3 src/agnova/selftest.py "$@"
-    ;;
-  test)
-    exec python3 -m unittest discover -s tests -v
-    ;;
-  upstream-check)
-    exec python3 src/agnova/upstream.py check
-    ;;
-  upstream-update)
-    exec python3 src/agnova/upstream.py update "$@"
-    ;;
-  install)
-    # The pinned commit, never upstream's default branch — see
-    # agnova/upstream.lock for why that distinction matters.
-    eval "$(python3 src/agnova/upstream.py clone-args)"
-    # `cargo install` rather than `cargo build`: it places the binary in
-    # ~/.cargo/bin, which survives a sandbox reclaim, whereas a build tree under
-    # /tmp does not. Measured: after a reclaim buzz-cli was still present and
-    # buzz-acp was not, purely because of this difference.
-    cargo install --path /tmp/buzz/crates/buzz-cli --locked
-    cargo install --path /tmp/buzz/crates/buzz-acp --locked
-    npm install -g @agentclientprotocol/claude-agent-acp
-    echo
-    # A convenience report, not part of the install. Naming no agent is a
-    # perfectly reasonable way to install, so it must not fail the build that
-    # just succeeded.
-    python3 src/agnova/supervise.py doctor "$@" || true
-    ;;
-  ""|-h|--help|help)
-    sed -n "3,19p" "$0" | sed "s|^# \{0,1\}||"
-    ;;
-  *)
-    echo "unknown command: $command" >&2
-    echo "try: bin/agnova help" >&2
-    exit 2
-    ;;
-esac
+exec python3 -c 'import sys; sys.path.insert(0, "src"); from agnova.supervise import main; main()' "$@"

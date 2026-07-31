@@ -288,29 +288,105 @@ def logs(cfg: AgentConfig, lines: int) -> int:
     return 0
 
 
+def install() -> int:
+    """Build the pinned upstream and install the ACP adapter.
+
+    Python rather than shell so the installed console script can do it: an agent
+    repo consumes agnova as a dependency and has no checkout of this repo to run
+    a script from.
+    """
+    from agnova import upstream
+
+    lock = upstream.read_lock()
+    print(f"{DIM}building{RESET} {lock['ref']} {DIM}{lock['sha'][:12]}{RESET} from {lock['repo']}")
+    checkout = Path("/tmp/buzz")  # noqa: S108 — deliberately outside any repo; a reclaim discards it
+    if not (checkout / ".git").is_dir():
+        run_step(["git", "clone", "--filter=blob:none", lock["repo"], str(checkout)])
+    run_step(["git", "-C", str(checkout), "fetch", "--depth", "1", "origin", lock["sha"]])
+    run_step(["git", "-C", str(checkout), "checkout", "--detach", lock["sha"]])
+
+    # `cargo install`, never `cargo build`: it places the binary in ~/.cargo/bin,
+    # which survives a sandbox reclaim. A build tree under /tmp does not.
+    #
+    # buzz-cli is NOT built. buzz-acp publishes replies over its own relay
+    # socket; buzz-cli is only the agent's tool surface, and only when
+    # BUZZ_ACP_MCP_COMMAND names it. Build it separately if you want it.
+    run_step(["cargo", "install", "--path", str(checkout / "crates/buzz-acp"), "--locked"])
+    run_step(["npm", "install", "-g", "@agentclientprotocol/claude-agent-acp"])
+    ok("installed — next: agnova doctor <agent>")
+    return 0
+
+
+def run_step(cmd: list[str]) -> None:
+    print(f"{DIM}$ {' '.join(cmd)}{RESET}")
+    out = subprocess.run(cmd, check=False)  # noqa: S603 — fixed argv, shell=False
+    if out.returncode != 0:
+        raise SystemExit(f"failed: {' '.join(cmd)}")
+
+
+#: Commands that act on the machine or the version pin rather than on one
+#: agent. They must dispatch before a config is loaded — `install` on a fresh
+#: box has no agent configured yet, and requiring one would be a chicken-and-egg.
+def _hostwide(command: str, agent: str | None) -> int | None:
+    from agnova import upstream
+
+    if command == "install":
+        return install()
+    if command == "upstream-check":
+        return upstream.check()
+    if command == "upstream-update":
+        return upstream.update(agent)
+    return None
+
+
+def _agent_command(command: str, cfg: AgentConfig, lines: int) -> int:
+    from agnova import selftest
+
+    if command == "up":
+        return up(cfg)
+    if command == "down":
+        return down(cfg)
+    if command == "restart":
+        down(cfg)
+        return up(cfg)
+    if command == "status":
+        return status(cfg)
+    if command == "logs":
+        return logs(cfg, lines)
+    if command == "selftest":
+        selftest.run(cfg.name)
+        return 0
+    # doctor: a diagnosis is not a failure — this must never break a session start.
+    doctor(cfg)
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a Buzz agent.")
-    parser.add_argument("command", choices=["up", "down", "restart", "status", "doctor", "logs"])
+    parser.add_argument(
+        "command",
+        choices=[
+            "up",
+            "down",
+            "restart",
+            "status",
+            "doctor",
+            "logs",
+            "selftest",
+            "install",
+            "upstream-check",
+            "upstream-update",
+        ],
+    )
     parser.add_argument("agent", nargs="?", help="agent name (see agents/*.env)")
     parser.add_argument("--lines", type=int, default=25)
     args = parser.parse_args()
 
-    cfg = agent_config.load(args.agent)
-    if args.command == "up":
-        sys.exit(up(cfg))
-    if args.command == "down":
-        sys.exit(down(cfg))
-    if args.command == "restart":
-        down(cfg)
-        sys.exit(up(cfg))
-    if args.command == "status":
-        sys.exit(status(cfg))
-    if args.command == "doctor":
-        # A diagnosis is not a failure — this must never break a session start.
-        doctor(cfg)
-        sys.exit(0)
-    if args.command == "logs":
-        sys.exit(logs(cfg, args.lines))
+    code = _hostwide(args.command, args.agent)
+    if code is not None:
+        sys.exit(code)
+
+    sys.exit(_agent_command(args.command, agent_config.load(args.agent), args.lines))
 
 
 if __name__ == "__main__":

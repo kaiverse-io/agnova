@@ -80,7 +80,11 @@ def query(port: int, secret: coincurve.PrivateKey) -> tuple[bool, str]:
 
 
 def main() -> None:
-    cfg = agent_config.load(sys.argv[1] if len(sys.argv) > 1 else None)
+    run(sys.argv[1] if len(sys.argv) > 1 else None)
+
+
+def run(agent: str | None) -> None:
+    cfg = agent_config.load(agent)
     secret = nostr.load_secret_key(cfg.secret_key)
     print(f"pubkey {nostr.public_key_hex(secret)}")
     print(f"front door 127.0.0.1:{cfg.frontdoor_port} -> {cfg.relay_url}\n")
