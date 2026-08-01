@@ -191,37 +191,64 @@ def doctor(cfg: AgentConfig) -> int:
 # --- commands ----------------------------------------------------------------
 
 
+def _enforce_dna(cfg: AgentConfig) -> int:
+    """Return 0 if DNA checks pass / are skipped; 1 on fail-closed mismatch."""
+    from agnova import dna
+
+    try:
+        computed = dna.enforce(
+            cfg.home,
+            expected=cfg.dna_hash,
+            paths=cfg.dna_paths,
+        )
+    except SystemExit as exc:
+        bad(str(exc))
+        return 1
+    if computed:
+        ok(f"DNA integrity verified ({computed[:19]}…)")
+    return 0
+
+
+def _ensure_frontdoor(cfg: AgentConfig) -> int:
+    if not cfg.uses_frontdoor:
+        ok(f"direct to {cfg.relay_url} — no front door needed on this host")
+        return 0
+    if running_pid(cfg, "frontdoor"):
+        ok("front door already up")
+        return 0
+    env = dict(os.environ)
+    env.update({"BUZZ_RELAY_URL": cfg.relay_url, "BUZZ_PRIVATE_KEY": cfg.secret_key})
+    pid = spawn(
+        cfg,
+        "frontdoor",
+        [
+            sys.executable,
+            str(PACKAGE_DIR / "frontdoor.py"),
+            "--port",
+            str(cfg.frontdoor_port),
+        ],
+        env,
+        ROOT,
+    )
+    time.sleep(1.5)
+    if running_pid(cfg, "frontdoor"):
+        ok(f"front door up on 127.0.0.1:{cfg.frontdoor_port} (pid {pid})")
+        return 0
+    bad(f"front door failed — see {log_file(cfg, 'frontdoor').relative_to(ROOT)}")
+    return 1
+
+
 def up(cfg: AgentConfig) -> int:
+    if _enforce_dna(cfg) != 0:
+        return 1
+
     binary = buzz_acp_binary()
     if not binary:
         bad("buzz-acp not found — run `./agent install`")
         return 1
 
-    if not cfg.uses_frontdoor:
-        ok(f"direct to {cfg.relay_url} — no front door needed on this host")
-    elif running_pid(cfg, "frontdoor"):
-        ok("front door already up")
-    else:
-        env = dict(os.environ)
-        env.update({"BUZZ_RELAY_URL": cfg.relay_url, "BUZZ_PRIVATE_KEY": cfg.secret_key})
-        pid = spawn(
-            cfg,
-            "frontdoor",
-            [
-                sys.executable,
-                str(PACKAGE_DIR / "frontdoor.py"),
-                "--port",
-                str(cfg.frontdoor_port),
-            ],
-            env,
-            ROOT,
-        )
-        time.sleep(1.5)
-        if running_pid(cfg, "frontdoor"):
-            ok(f"front door up on 127.0.0.1:{cfg.frontdoor_port} (pid {pid})")
-        else:
-            bad(f"front door failed — see {log_file(cfg, 'frontdoor').relative_to(ROOT)}")
-            return 1
+    if _ensure_frontdoor(cfg) != 0:
+        return 1
 
     if running_pid(cfg, "harness"):
         ok("buzz-acp already up")

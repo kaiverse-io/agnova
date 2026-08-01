@@ -113,6 +113,11 @@ class AgentConfig:
     engram_paths: list[str] = field(default_factory=list)
     checkpoint_paths: list[str] = field(default_factory=list)
     checkpoint_interval: int = 900
+    checkpoint_upload_url: str | None = None
+    checkpoint_token: str | None = field(default=None, repr=False)
+    dna_hash: str | None = None
+    dna_paths: list[str] = field(default_factory=list)
+    memory_backend: str = "git"
     env: dict[str, str] = field(default_factory=dict, repr=False)
 
     @property
@@ -170,6 +175,12 @@ class AgentConfig:
             env["BUZZ_ACP_AGENT_OWNER"] = self.owner_pubkey
         if self.auth_tag:
             env["BUZZ_AUTH_TAG"] = self.auth_tag
+        if self.checkpoint_upload_url:
+            env["AGENT_CHECKPOINT_UPLOAD_URL"] = self.checkpoint_upload_url
+        if self.checkpoint_token:
+            env["AGENT_CHECKPOINT_TOKEN"] = self.checkpoint_token
+        env["AGENT_MEMORY_BACKEND"] = self.memory_backend
+        env.setdefault("BUZZ_AGENT_HOME", str(self.home))
         return env
 
 
@@ -203,6 +214,8 @@ def load(name: str | None = None) -> AgentConfig:
         )
 
     home = Path(value("BUZZ_AGENT_HOME", str(ROOT))).expanduser()
+    from agnova.dna import paths_from_env
+
     config = AgentConfig(
         name=name,
         label=value("BUZZ_AGENT_LABEL", name.capitalize()),
@@ -224,6 +237,11 @@ def load(name: str | None = None) -> AgentConfig:
             p.strip() for p in value("AGENT_CHECKPOINT_PATHS").split(",") if p.strip()
         ],
         checkpoint_interval=max(60, int(value("AGENT_CHECKPOINT_INTERVAL", "900"))),
+        checkpoint_upload_url=value("AGENT_CHECKPOINT_UPLOAD_URL") or None,
+        checkpoint_token=value("AGENT_CHECKPOINT_TOKEN") or None,
+        dna_hash=value("AGENT_DNA_HASH") or None,
+        dna_paths=paths_from_env(value("AGENT_DNA_PATHS") or None),
+        memory_backend=value("AGENT_MEMORY_BACKEND", "git").lower() or "git",
         env={k: v for k, v in file_values.items() if k.startswith("BUZZ_ACP_")},
     )
     if not config.relay_url:

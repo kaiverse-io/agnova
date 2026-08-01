@@ -21,6 +21,7 @@ Source = "https://github.com/km2411/agnova"
 
 [project.scripts]
 agnova = "agnova.supervise:main"
+agnova-memory = "agnova.memory.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -46,6 +46,20 @@ for the full set.
 | `BUZZ_CA_BUNDLE` | `/root/.ccr/ca-bundle.crt` if present | CA bundle for the upstream TLS leg. |
 | `HTTPS_PROXY` | from environment | If set, the front door tunnels through it with `CONNECT`. If unset, it connects directly — which is correct on a normal host. |
 
+## DNA integrity + memory (Aither overlay)
+
+| Variable | Default | Description |
+|---|---|---|
+| `AGENT_DNA_HASH` | — | `sha256:{hex}` of the DNA package. When set, `agnova up` fail-closes on mismatch (see ADR-002). |
+| `AGENT_DNA_PATHS` | `DNA.md,IDENTITY.md,SOUL.md,DOMAIN.md,AGENTS.md,USER.md` | Comma-separated paths hashed under `BUZZ_AGENT_HOME`. Missing files are skipped. |
+| `AGENT_CHECKPOINT_PATHS` | — | Paths the checkpoint loop keeps durable (e.g. `memory/,MEMORY.md`). Empty = checkpoint off. |
+| `AGENT_CHECKPOINT_INTERVAL` | `900` | Seconds between checkpoint ticks (minimum 60). |
+| `AGENT_CHECKPOINT_UPLOAD_URL` | — | Control-plane POST URL for a git bundle (after commit; push still happens if a remote exists). |
+| `AGENT_CHECKPOINT_TOKEN` | — | Bearer token for the upload URL. |
+| `AGENT_MEMORY_BACKEND` | `git` | Backend for `agnova-memory` MCP. Only `git` is implemented until Qortia eval gate. |
+
+Run the memory MCP as `agnova-memory` (stdio). It reads `BUZZ_AGENT_HOME` / `AGNOVA_HOME`.
+
 ## Files on disk
 
 | Path | Contents |
