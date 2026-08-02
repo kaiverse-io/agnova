@@ -1,8 +1,9 @@
-_commit: v0.8.6
-_src_path: /workspace/chassis
+_commit: v0.10.0
+_src_path: https://github.com/km2411/chassis.git
 author_email: noreply@users.noreply.github.com
 author_name: km2411
 description: Run an AI agent as a first-class participant in a Buzz workspace.
+enable_docker_outside_of_docker: true
 github_owner: km2411
 include_ts: false
 install_ai_coach: false
