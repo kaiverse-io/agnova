@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,7 +12,6 @@ from agnova import config, engram, mint_auth_tag, runtime, scaffold, selftest, s
 from agnova.config import AgentConfig
 from agnova.memory import mcp_server
 from agnova.memory.git_backend import GitMemoryBackend
-
 
 OWNER_SECRET = "00" * 31 + "01"
 OWNER_PUBKEY = mint_auth_tag.VECTOR["owner_pubkey"]
@@ -87,7 +84,7 @@ def test_load_merges_file_and_environment_with_host_precedence(
                 "BUZZ_FRONTDOOR_PORT=9001",
                 "BUZZ_ACP_AGENT_COMMAND=file-agent",
                 "BUZZ_ACP_RESPOND_TO=owner-only",
-                "BUZZ_AUTH_TAG=[\"auth\"]",
+                'BUZZ_AUTH_TAG=["auth"]',
                 "BUZZ_AGENT_HOME=.",
                 "AGNOVA_TRANSPORT=direct",
                 "AGENT_ENGRAM_PATHS=SOUL.md, PRINCIPLES.md",
@@ -176,7 +173,9 @@ def test_agent_config_transport_modes(
     cfg = _cfg(tmp_path, transport=transport)
 
     assert cfg.uses_frontdoor is expected
-    assert cfg.local_relay_url == (f"ws://127.0.0.1:{cfg.frontdoor_port}" if expected else cfg.relay_url)
+    assert cfg.local_relay_url == (
+        f"ws://127.0.0.1:{cfg.frontdoor_port}" if expected else cfg.relay_url
+    )
     assert cfg.path("frontdoor.pid") == cfg.var / "frontdoor.pid"
 
 
@@ -242,7 +241,11 @@ def test_mcp_dispatch_covers_tools_and_json_rpc(tmp_path: Path) -> None:
     ):
         reply = mcp_server._handle(
             backend,
-            {"id": 3, "method": "tools/call", "params": {"name": tool_name, "arguments": arguments}},
+            {
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": tool_name, "arguments": arguments},
+            },
         )
         assert "content" in reply["result"]
 
@@ -277,7 +280,9 @@ def test_mcp_main_ignores_bad_lines_and_flushes_replies(
     assert json.loads(lines[0])["result"]["tools"] == mcp_server.TOOLS
 
 
-def test_runtime_read_lock_and_missing_keys(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_runtime_read_lock_and_missing_keys(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(runtime, "ROOT", tmp_path)
     (tmp_path / runtime.LOCK).write_text(
         "# comment\nrepo = https://example/repo.git\nignored\nref = main\nsha = abc123\n",
@@ -544,8 +549,9 @@ def test_engram_publish_skips_matching_digest_and_publishes_changes(
 def test_mint_auth_tag_vector_selftest_and_success(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert mint_auth_tag.digest(AGENT_PUBKEY, mint_auth_tag.VECTOR["conditions"]).hex() == (
-        mint_auth_tag.VECTOR["digest"]
+    assert (
+        mint_auth_tag.digest(AGENT_PUBKEY, mint_auth_tag.VECTOR["conditions"]).hex()
+        == (mint_auth_tag.VECTOR["digest"])
     )
     assert mint_auth_tag.selftest() == 0
     assert "SELFTEST: PASS" in capsys.readouterr().out
@@ -586,7 +592,7 @@ def test_selftest_upgrade_parses_status_and_auth_frame(monkeypatch: pytest.Monke
             self.sent = b""
             self.reads = [
                 b"HTTP/1.1 101 Switching Protocols\r\n\r\n",
-                b"\x81\x0f[\"AUTH\",\"abc\"]",
+                b'\x81\x0f["AUTH","abc"]',
             ]
 
         def sendall(self, data: bytes) -> None:
@@ -625,9 +631,7 @@ def test_selftest_query_posts_signed_loopback_request(monkeypatch: pytest.Monkey
         def __init__(self, host: str, port: int, timeout: int) -> None:
             captured["connect"] = (host, port, timeout)
 
-        def request(
-            self, method: str, path: str, body: bytes, headers: dict[str, str]
-        ) -> None:
+        def request(self, method: str, path: str, body: bytes, headers: dict[str, str]) -> None:
             captured["request"] = (method, path, body, headers)
 
         def getresponse(self) -> Response:
@@ -669,9 +673,7 @@ def test_selftest_run_exits_nonzero_on_probe_failure(
     assert "Is the front door up?" in output
 
 
-def test_supervise_process_bookkeeping(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_supervise_process_bookkeeping(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
     cfg = _cfg(tmp_path)
     cfg.var.mkdir(parents=True)
@@ -697,9 +699,7 @@ def test_supervise_process_bookkeeping(
     monkeypatch.setattr(supervise.subprocess, "Popen", fake_popen)
     assert supervise.spawn(cfg, "frontdoor", ["cmd"], {"ENV": "1"}, tmp_path) == 456
     assert supervise.pid_file(cfg, "frontdoor").read_text(encoding="utf-8") == "456\n"
-    assert "frontdoor starting" in supervise.log_file(cfg, "frontdoor").read_text(
-        encoding="utf-8"
-    )
+    assert "frontdoor starting" in supervise.log_file(cfg, "frontdoor").read_text(encoding="utf-8")
     assert popen_calls == [(["cmd"], tmp_path)]
 
 
@@ -714,9 +714,7 @@ def test_supervise_stop_terminates_process_group_and_cleans_pid(
     signals: list[tuple[str, int, int]] = []
     monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: next(states))
     monkeypatch.setattr(supervise.os, "getpgid", lambda pid: 999)
-    monkeypatch.setattr(
-        supervise.os, "killpg", lambda pgid, sig: signals.append(("pg", pgid, sig))
-    )
+    monkeypatch.setattr(supervise.os, "killpg", lambda pgid, sig: signals.append(("pg", pgid, sig)))
     monkeypatch.setattr(supervise.time, "sleep", lambda seconds: None)
 
     assert supervise.stop(cfg, "harness") is True
@@ -750,12 +748,16 @@ def test_supervise_doctor_status_logs_and_down(
     monkeypatch.setattr(config, "ROOT", tmp_path)
     monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
     monkeypatch.setattr(supervise, "ROOT", tmp_path)
-    cfg = _cfg(tmp_path, secret_key="", owner_pubkey="", auth_tag=None, checkpoint_paths=["MEMORY.md"])
+    cfg = _cfg(
+        tmp_path, secret_key="", owner_pubkey="", auth_tag=None, checkpoint_paths=["MEMORY.md"]
+    )
     cfg.var.mkdir(parents=True)
     (cfg.var / "harness.log").write_text("one\ntwo\nthree\n", encoding="utf-8")
     monkeypatch.setattr(supervise, "buzz_acp_binary", lambda: None)
     monkeypatch.setattr(supervise.shutil, "which", lambda name: None)
-    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: 77 if service == "harness" else None)
+    monkeypatch.setattr(
+        supervise, "running_pid", lambda cfg, service: 77 if service == "harness" else None
+    )
 
     doctor_rc = supervise.doctor(cfg)
     assert doctor_rc >= 3
@@ -796,7 +798,9 @@ def test_supervise_up_starts_needed_services_and_reports_failures(
         return 100 + len(spawns)
 
     monkeypatch.setattr(supervise, "spawn", fake_spawn)
-    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: 42 if service in live else None)
+    monkeypatch.setattr(
+        supervise, "running_pid", lambda cfg, service: 42 if service in live else None
+    )
 
     assert supervise.up(cfg) == 0
     assert [service for service, _, _ in spawns] == ["frontdoor", "checkpoint", "harness"]
@@ -904,8 +908,12 @@ def test_supervise_hostwide_dispatch(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert supervise._hostwide("init", "scout") == 24
 
 
-def test_supervise_install_and_run_step(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.setattr(upstream, "read_lock", lambda: {"repo": "repo", "ref": "v1", "sha": "abcdef"})
+def test_supervise_install_and_run_step(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(
+        upstream, "read_lock", lambda: {"repo": "repo", "ref": "v1", "sha": "abcdef"}
+    )
     steps: list[list[str]] = []
     monkeypatch.setattr(supervise, "run_step", lambda cmd: steps.append(list(cmd)))
 

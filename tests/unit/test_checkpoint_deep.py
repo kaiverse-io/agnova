@@ -206,9 +206,7 @@ def test_checkpoint_once_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert "scout: checkpoint memory" in log.stdout
 
 
-def test_checkpoint_once_handles_failures(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_checkpoint_once_handles_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _init_git(tmp_path)
     (tmp_path / "MEMORY.md").write_text("changed\n", encoding="utf-8")
     logs: list[str] = []

@@ -84,7 +84,9 @@ def test_upstream_connects_direct_and_wraps_tls(monkeypatch: pytest.MonkeyPatch)
     upstream_writer = Writer()
     upstream_reader_holder: list[asyncio.StreamReader] = []
 
-    async def open_connection(host: str | None, port: int | None) -> tuple[asyncio.StreamReader, Writer]:
+    async def open_connection(
+        host: str | None, port: int | None
+    ) -> tuple[asyncio.StreamReader, Writer]:
         calls.append((host, port))
         return upstream_reader_holder[0], upstream_writer
 
@@ -106,7 +108,9 @@ def test_upstream_connects_direct_and_wraps_tls(monkeypatch: pytest.MonkeyPatch)
 def test_upstream_connects_direct_without_tls(monkeypatch: pytest.MonkeyPatch) -> None:
     upstream_writer = Writer()
 
-    async def open_connection(host: str | None, port: int | None) -> tuple[asyncio.StreamReader, Writer]:
+    async def open_connection(
+        host: str | None, port: int | None
+    ) -> tuple[asyncio.StreamReader, Writer]:
         reader = asyncio.StreamReader()
         reader.feed_eof()
         return reader, upstream_writer
@@ -119,9 +123,7 @@ def test_upstream_connects_direct_without_tls(monkeypatch: pytest.MonkeyPatch) -
 def test_upstream_connects_through_proxy_and_reports_refusals(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def accepted(
-        host: str | None, port: int | None
-    ) -> tuple[asyncio.StreamReader, Writer]:
+    async def accepted(host: str | None, port: int | None) -> tuple[asyncio.StreamReader, Writer]:
         assert (host, port) == ("proxy.example", 3128)
         return (
             await reader_with(b"HTTP/1.1 200 Connection Established\r\nVia: test\r\n\r\n"),
@@ -138,9 +140,7 @@ def test_upstream_connects_through_proxy_and_reports_refusals(
 
     refused_writer = Writer()
 
-    async def refused(
-        host: str | None, port: int | None
-    ) -> tuple[asyncio.StreamReader, Writer]:
+    async def refused(host: str | None, port: int | None) -> tuple[asyncio.StreamReader, Writer]:
         del host, port
         return await reader_with(b"HTTP/1.1 403 Forbidden\r\n\r\n"), refused_writer
 
@@ -331,13 +331,13 @@ def test_handle_returns_502_when_upstream_connect_fails() -> None:
         async def connect(self) -> tuple[asyncio.StreamReader, Writer]:
             raise OSError("no route")
 
-    door = frontdoor.FrontDoor(FailedUpstream("wss://relay.example", None, None), secret(), quiet=True)
+    door = frontdoor.FrontDoor(
+        FailedUpstream("wss://relay.example", None, None), secret(), quiet=True
+    )
     writer = Writer()
 
     async def run() -> None:
-        await door.handle(
-            await reader_with(b"GET / HTTP/1.1\r\nHost: local\r\n\r\n"), writer
-        )
+        await door.handle(await reader_with(b"GET / HTTP/1.1\r\nHost: local\r\n\r\n"), writer)
 
     asyncio.run(run())
 
@@ -396,9 +396,7 @@ def test_handle_websocket_uses_frame_pump(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(door, "pump_client_frames", fake_pump)
 
     async def run() -> None:
-        up_reader_holder.append(
-            await reader_with(b"HTTP/1.1 101 Switching Protocols\r\n\r\n")
-        )
+        up_reader_holder.append(await reader_with(b"HTTP/1.1 101 Switching Protocols\r\n\r\n"))
         await door.handle(
             await reader_with(b"GET / HTTP/1.1\r\nHost: local\r\nUpgrade: websocket\r\n\r\n"),
             Writer(),
@@ -500,7 +498,9 @@ def test_main_runs_server_and_swallows_keyboard_interrupt(
         return Door(quiet)
 
     monkeypatch.setattr(frontdoor, "build", fake_build)
-    monkeypatch.setattr(frontdoor.sys, "argv", ["frontdoor", "--host", "0.0.0.0", "--port", "9000", "--quiet"])
+    monkeypatch.setattr(
+        frontdoor.sys, "argv", ["frontdoor", "--host", "0.0.0.0", "--port", "9000", "--quiet"]
+    )
     frontdoor.main()
     assert served == [("0.0.0.0", 9000, True)]
 

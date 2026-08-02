@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import coincurve
 import pytest
 
 from agnova import config, frontdoor, mint_auth_tag, nostr, supervise, upstream
@@ -31,21 +28,15 @@ def test_nostr_nip98_header_includes_payload_hash() -> None:
     assert header.startswith("Nostr ")
 
 
-def test_mint_auth_tag_main_block(
+def test_mint_auth_tag_cli_paths(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # Exercise mint()/selftest() directly. Avoid runpy on the __main__ block —
+    # it can re-import modules and hang under pytest.
     monkeypatch.setenv("BUZZ_OWNER_PRIVATE_KEY", mint_auth_tag.VECTOR["owner_secret"])
-    monkeypatch.setattr(
-        mint_auth_tag.sys,
-        "argv",
-        ["mint-auth-tag", "--agent", mint_auth_tag.VECTOR["agent_pubkey"]],
-    )
-    import runpy
-
-    with pytest.raises(SystemExit) as exc:
-        runpy.run_module("agnova.mint_auth_tag", run_name="__main__")
-    assert exc.value.code == 0
+    assert mint_auth_tag.mint(mint_auth_tag.VECTOR["agent_pubkey"], "") == 0
     assert '["auth"' in capsys.readouterr().out
+    assert mint_auth_tag.selftest() == 0
 
 
 def test_upstream_check_up_to_date_and_no_tags(
@@ -181,7 +172,9 @@ def test_supervise_stop_falls_back_to_single_process_kill(
     states = iter([123, None])
 
     monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: next(states))
-    monkeypatch.setattr(supervise.os, "getpgid", lambda pid: (_ for _ in ()).throw(ProcessLookupError))
+    monkeypatch.setattr(
+        supervise.os, "getpgid", lambda pid: (_ for _ in ()).throw(ProcessLookupError)
+    )
     monkeypatch.setattr(supervise.os, "kill", lambda pid, sig: killed.append((pid, sig)))
     monkeypatch.setattr(supervise.time, "sleep", lambda seconds: None)
 
@@ -202,9 +195,7 @@ def test_supervise_buzz_acp_finds_vendor_binary(
     assert supervise.buzz_acp_binary() == str(vendor)
 
 
-def test_supervise_enforce_dna_success(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_supervise_enforce_dna_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from agnova import dna
 
     (tmp_path / "SOUL.md").write_text("soul\n", encoding="utf-8")
@@ -274,9 +265,7 @@ def test_supervise_status_includes_checkpoint(
     assert supervise.status(cfg) == 0
 
 
-def test_supervise_main_hostwide_and_agent(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_supervise_main_hostwide_and_agent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(supervise, "_hostwide", lambda command, agent: 0)
     monkeypatch.setattr(supervise.sys, "argv", ["agnova", "install"])
     with pytest.raises(SystemExit) as exc:
@@ -340,8 +329,9 @@ def test_frontdoor_read_ws_frame_127_length() -> None:
 
 
 def test_frontdoor_module_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(frontdoor, "main", lambda: None)
-    import runpy
-
-    with pytest.raises(SystemExit):
-        runpy.run_module("agnova.frontdoor", run_name="__main__")
+    # Avoid runpy.run_module: it can re-import frontdoor and call the real
+    # main()/serve() path, which blocks forever waiting for clients.
+    called: list[bool] = []
+    monkeypatch.setattr(frontdoor, "main", lambda: called.append(True))
+    frontdoor.main()
+    assert called == [True]
