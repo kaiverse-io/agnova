@@ -4,7 +4,7 @@ root_packages =
 include_external_packages = True
 
 [importlinter:contract:no-control-plane-or-memory-engine]
-name = Agnova must not import aither or qortia
+name = Agnova must not import control-plane or memory-engine packages in-process
 type = forbidden
 source_modules =
     agnova
