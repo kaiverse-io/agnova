@@ -1,11 +1,11 @@
 """DNA integrity — fail-closed at boot when AGENT_DNA_HASH is set.
 
-Hash algorithm (v0.1, must match Aither overlay):
+Hash algorithm (v0.1, must match whoever minted AGENT_DNA_HASH):
   For each path in AGENT_DNA_PATHS (or defaults), if the file exists relative
   to the agent home, append UTF-8 bytes of ``{relpath}\\0{content}\\n``.
   digest = sha256 of the concatenation; stored/compared as ``sha256:{hex}``.
 
-Missing files among the configured list are skipped (so overlays can omit
+Missing files among the configured list are skipped (so an overlay can omit
 optional USER.md). An empty concatenation is still a defined hash.
 """
 

@@ -92,7 +92,7 @@ def upload_bundle(
     bundle: Path,
     log: Callable[..., None] = print,
 ) -> bool:
-    """POST a git bundle to a generic control-plane URL (no Aither imports)."""
+    """POST a git bundle to a generic control-plane URL (HTTP only; no in-process imports)."""
     body = bundle.read_bytes()
     digest = hashlib.sha256(body).hexdigest()
     parsed = urlparse(url)

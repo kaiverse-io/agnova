@@ -11,15 +11,15 @@
 Agnova is a **Buzz agent runtime harness**: it supervises stock `buzz-acp`, optionally puts a
 TLS front door in front of the relay, checkpoints named memory paths (git push and/or HTTP
 git-bundle upload), and enforces operator-owned DNA integrity at boot. Buzz is the only
-channel today; a multi-protocol adapter seam is deferred. It must not import Aither or
-Qortia — control plane and memory engine talk over HTTP/OpenAPI only.
+channel today; a multi-protocol adapter seam is deferred. It must not import a control plane
+or memory engine in-process — those talk over HTTP/OpenAPI only.
 
 ## System Overview
 
 ```
   Buzz relay  <──TLS──>  frontdoor (optional)  <──ws──>  buzz-acp (ACP harness)
                                                               │
-  operator / Aither overlay ──DNA hash──> supervise.up ───────┤
+  operator overlay ──DNA hash──> supervise.up ────────────────┤
                                                               │
   checkpoint loop ──git commit/push──┐                        │
                      └─HTTP git bundle─> control plane         │
@@ -64,7 +64,7 @@ Depends on: `nostr` for auth material when required.
 
 Purpose: `agnova-memory` MCP stdio server + git filesystem backend
 (`context|recall|remember|forget`). Qortia backend deferred.
-Depends on: stdlib + agent home paths. Forbids importing `aither`/`qortia`.
+Depends on: stdlib + agent home paths. Forbids in-process control-plane / memory-engine imports.
 
 ## mint_auth_tag
 
@@ -106,4 +106,4 @@ Depends on: network + lockfile.
 
 - Memory MCP `qortia` backend not implemented until Qortia G1 scored evals.
 - Checkpoint upload is best-effort; failures must not kill the agent.
-- Warm Cursor Cloud / Agnova cohabitation is spike-gated (Aither Phase 4).
+- Warm Cursor Cloud / Agnova cohabitation is spike-gated (deferred).

@@ -1,4 +1,4 @@
-"""Memory backends for agnova-memory MCP — no Aither/Qortia imports."""
+"""Memory backends for agnova-memory MCP — HTTP/stdio only; no in-process engine imports."""
 
 from __future__ import annotations
 
