@@ -1,7 +1,7 @@
 [project]
 name = "agnova"
 version = "0.1.0"
-description = "Run an AI agent as a first-class participant in a Buzz workspace, including from sandboxes that cannot open a WebSocket."
+description = "Run an AI agent as a first-class Buzz workspace participant — including from sandboxes that cannot open a WebSocket."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 # 3.11: the code uses no 3.12-only syntax and every module imports and
