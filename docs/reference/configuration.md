@@ -81,4 +81,4 @@ Run the memory MCP as `agnova-memory` (stdio). It reads `BUZZ_AGENT_HOME` / `AGN
 | `bin/agnova selftest [name]` | Prove the transport without spending a token. |
 | `bin/agnova install` | Build `buzz-cli` and `buzz-acp`, install the Claude ACP adapter. |
 
-The agent name defaults to `BUZZ_AGENT_NAME`, then to `ben`.
+The agent name defaults to `BUZZ_AGENT_NAME` (required when not passed on the CLI).

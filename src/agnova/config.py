@@ -32,7 +32,7 @@ def _workspace() -> Path:
       2. the enclosing git repository of the current directory
       3. the current directory
 
-    Rule 2 is what makes `agnova up ben` work from anywhere inside the agent's
+    Rule 2 is what makes `agnova up scout` work from anywhere inside the agent's
     checkout, which is how it is actually invoked.
     """
     explicit = os.environ.get("AGNOVA_HOME", "").strip()

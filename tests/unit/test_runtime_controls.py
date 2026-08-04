@@ -141,16 +141,16 @@ def test_load_reports_actionable_errors(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.delenv("BUZZ_PRIVATE_KEY", raising=False)
     monkeypatch.delenv("BUZZ_RELAY_URL", raising=False)
 
-    with pytest.raises(SystemExit, match="available: ben"):
+    with pytest.raises(SystemExit, match="available: scout"):
         config.load()
     with pytest.raises(SystemExit, match="expected agents/missing.env"):
         config.load("missing")
     with pytest.raises(SystemExit, match="BUZZ_PRIVATE_KEY is not set"):
-        config.load("ben")
+        config.load("scout")
 
     (agents / "scout.env").write_text("BUZZ_PRIVATE_KEY=secret\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="BUZZ_RELAY_URL is not set"):
-        config.load("ben")
+        config.load("scout")
 
 
 @pytest.mark.parametrize(

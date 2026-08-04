@@ -14,7 +14,7 @@ from agnova.config import AgentConfig
 
 def _cfg(home: Path, **kwargs: object) -> AgentConfig:
     base: dict = dict(
-        name="ben",
+        name="scout",
         label="Scout",
         home=home,
         relay_url="wss://relay.example",

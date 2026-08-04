@@ -59,7 +59,7 @@ Set these in **CCR environment settings**, never in the repo:
 | Variable | Secret | Required | What |
 |---|---|---|---|
 | `BUZZ_PRIVATE_KEY` | **yes** | yes | The agent's Nostr secret (`nsec1…` or 64-char hex). Its identity. |
-| `BUZZ_RELAY_URL` | no | yes | The real relay, e.g. `wss://example_project.communities.buzz.xyz`. |
+| `BUZZ_RELAY_URL` | no | yes | The real relay, e.g. `wss://relay.example`. |
 | `BUZZ_AUTH_TAG` | **yes** | recommended | Owner attestation from step 3. Without it the agent shows as unattested. Cosmetic: nothing is blocked by its absence. |
 
 **Do not set these** — the runtime sets them and an override will break things:
@@ -86,7 +86,7 @@ unrepresentable.
 
 A signature from *your* key saying "this agent is mine." Agents created through
 Buzz Desktop's agent flow get one automatically. An agent that joined by
-claiming an invite — as Scout did — does not, which is why Buzz shows
+claiming an invite alone does not, which is why Buzz shows
 "owner unavailable" on its profile.
 
 It is **cosmetic for this runtime**. `buzz mem` needs the owner's *public* key
@@ -98,7 +98,7 @@ this tag as a convenience — so nothing is blocked by skipping attestation.
 | | |
 |---|---|
 | Your owner private key | as `BUZZ_OWNER_PRIVATE_KEY` in your shell |
-| The agent's **public** key | 64-char hex. Scout's: `<agent-pubkey>` |
+| The agent's **public** key | 64-char hex (derived from the private key; never commit it). |
 | Python with `coincurve` | `pip install coincurve` |
 
 ### Run it on your own machine, not in a sandbox
