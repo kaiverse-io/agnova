@@ -411,7 +411,9 @@ export BUZZ_RELAY_URL={relay or "wss://your.relay.host"}
 Then:
 
 ```bash
-pip install "agnova @ git+https://github.com/kaiverse-io/agnova@$(sed -n 's/^sha = //p' runtime.lock)"
+pip install \
+  "agnova @ git+https://github.com/kaiverse-io/agnova@$(
+    sed -n 's/^sha = //p' runtime.lock)"
 agnova install          # the pinned buzz-acp and the ACP adapter
 agnova doctor {name}
 agnova up {name}

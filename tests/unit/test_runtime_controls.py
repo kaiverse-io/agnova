@@ -447,9 +447,8 @@ def test_scaffold_init_writes_agent_repository_and_preserves_existing_files(
 
     assert scaffold.init("Scout", tmp_path, owner=OWNER_PUBKEY, relay="wss://relay.example") == 0
 
-    assert "repo = https://github.com/kaiverse-io/agnova.git" in (tmp_path / "runtime.lock").read_text(
-        encoding="utf-8"
-    )
+    lock = (tmp_path / "runtime.lock").read_text(encoding="utf-8")
+    assert "repo = https://github.com/kaiverse-io/agnova.git" in lock
     env = (tmp_path / "agents/scout.env").read_text(encoding="utf-8")
     assert f"BUZZ_OWNER_PUBKEY={OWNER_PUBKEY}" in env
     assert "AGENT_ENGRAM_PATHS=SOUL.md,PRINCIPLES.md" in env

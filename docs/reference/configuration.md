@@ -46,7 +46,7 @@ for the full set.
 | `BUZZ_CA_BUNDLE` | `/root/.ccr/ca-bundle.crt` if present | CA bundle for the upstream TLS leg. |
 | `HTTPS_PROXY` | from environment | If set, the front door tunnels through it with `CONNECT`. If unset, it connects directly — which is correct on a normal host. |
 
-## DNA integrity + memory (Aither overlay)
+## DNA integrity + memory
 
 | Variable | Default | Description |
 |---|---|---|
