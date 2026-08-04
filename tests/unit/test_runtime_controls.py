@@ -333,7 +333,7 @@ def test_runtime_installed_sha_from_direct_url(monkeypatch: pytest.MonkeyPatch) 
 def test_runtime_status_check_and_install(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    lock = {"repo": "https://github.com/km2411/agnova.git", "ref": "main", "sha": "abcdef"}
+    lock = {"repo": "https://github.com/kaiverse-io/agnova.git", "ref": "main", "sha": "abcdef"}
     monkeypatch.setattr(runtime, "read_lock", lambda: lock)
     monkeypatch.setattr(runtime, "installed_sha", lambda: None)
     assert runtime.status() == 0
@@ -374,7 +374,7 @@ def test_runtime_status_check_and_install(
     )
     assert runtime.install() == 0
     assert calls[0][:4] == [runtime.sys.executable, "-m", "pip", "install"]
-    assert calls[0][-1] == "agnova @ git+https://github.com/km2411/agnova@abcdef"
+    assert calls[0][-1] == "agnova @ git+https://github.com/kaiverse-io/agnova@abcdef"
 
     monkeypatch.setattr(
         runtime.subprocess,
@@ -447,7 +447,7 @@ def test_scaffold_init_writes_agent_repository_and_preserves_existing_files(
 
     assert scaffold.init("Scout", tmp_path, owner=OWNER_PUBKEY, relay="wss://relay.example") == 0
 
-    assert "repo = https://github.com/km2411/agnova.git" in (tmp_path / "runtime.lock").read_text(
+    assert "repo = https://github.com/kaiverse-io/agnova.git" in (tmp_path / "runtime.lock").read_text(
         encoding="utf-8"
     )
     env = (tmp_path / "agents/scout.env").read_text(encoding="utf-8")

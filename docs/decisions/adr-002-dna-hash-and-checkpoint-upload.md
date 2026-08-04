@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-01
-- **Deciders:** founder / Aither MVP plan
+- **Deciders:** founder / control-plane MVP plan
 
 ## Context
 

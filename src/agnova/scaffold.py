@@ -51,7 +51,7 @@ YELLOW = "\033[33m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 
-DEFAULT_REPO = "https://github.com/km2411/agnova.git"
+DEFAULT_REPO = "https://github.com/kaiverse-io/agnova.git"
 
 
 def _running_version() -> tuple[str, str]:
@@ -225,7 +225,7 @@ is a spec** — and a spec held here goes stale and misleads.
 ## Runtime
 
 This repository contains no runtime code. It is run by
-[agnova](https://github.com/km2411/agnova), pinned in `runtime.lock`.
+[agnova](https://github.com/kaiverse-io/agnova), pinned in `runtime.lock`.
 
 ```bash
 agnova doctor {name}     # diagnose, change nothing
@@ -396,7 +396,7 @@ __pycache__/
 
 An agent. Identity, memory and skills — no runtime code.
 
-The runtime is [agnova](https://github.com/km2411/agnova), installed as a
+The runtime is [agnova](https://github.com/kaiverse-io/agnova), installed as a
 dependency and pinned in `runtime.lock`.
 
 ## Running it
@@ -411,7 +411,7 @@ export BUZZ_RELAY_URL={relay or "wss://your.relay.host"}
 Then:
 
 ```bash
-pip install "agnova @ git+https://github.com/km2411/agnova@$(sed -n 's/^sha = //p' runtime.lock)"
+pip install "agnova @ git+https://github.com/kaiverse-io/agnova@$(sed -n 's/^sha = //p' runtime.lock)"
 agnova install          # the pinned buzz-acp and the ACP adapter
 agnova doctor {name}
 agnova up {name}

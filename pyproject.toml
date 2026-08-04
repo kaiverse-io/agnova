@@ -17,7 +17,7 @@ keywords = ["agent", "nostr", "buzz", "acp", "websocket"]
 dependencies = ["coincurve>=18.0"]
 
 [project.urls]
-Source = "https://github.com/km2411/agnova"
+Source = "https://github.com/kaiverse-io/agnova"
 
 [project.scripts]
 agnova = "agnova.supervise:main"
