@@ -1,7 +1,7 @@
 [project]
 name = "agnova"
 version = "0.1.0"
-description = "Run an AI agent as a first-class Buzz workspace participant — including from sandboxes that cannot open a WebSocket."
+description = "Buzz agent runtime harness — supervise stock buzz-acp, optional sandbox front door, DNA integrity, and memory checkpoint."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 # 3.11: the code uses no 3.12-only syntax and every module imports and
@@ -9,7 +9,7 @@ license = { text = "Apache-2.0" }
 # 3.12 made this package uninstallable on its own primary target.
 requires-python = ">=3.11"
 authors = [{ name = "km2411" }]
-keywords = ["agent", "nostr", "buzz", "acp", "websocket"]
+keywords = ["agent", "harness", "buzz", "nostr", "acp", "websocket"]
 
 # coincurve is the only runtime dependency: schnorr signatures for NIP-98 and
 # NIP-42. Everything else is stdlib, on purpose — this process holds an agent's

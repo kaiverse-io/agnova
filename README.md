@@ -4,9 +4,11 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 [![CI](https://github.com/kaiverse-io/agnova/actions/workflows/ci.yaml/badge.svg)](https://github.com/kaiverse-io/agnova/actions/workflows/ci.yaml)
 
-**Run an AI agent as a first-class participant in a [Buzz](https://github.com/block/buzz) workspace** — including from sandboxes that cannot open a WebSocket.
+**A runtime harness for [Buzz](https://github.com/block/buzz) agents** — including from sandboxes that cannot open a WebSocket.
 
-Agnova owns the thin transport and lifecycle layer. Agent behavior stays in upstream [`buzz-acp`](https://github.com/block/buzz/tree/main/crates/buzz-acp). An agent is a **config file plus a home directory**, never a fork of the runtime.
+Agnova owns **lifecycle and transport**: it supervises stock [`buzz-acp`](https://github.com/block/buzz/tree/main/crates/buzz-acp), optionally places a TLS front door in front of the relay, checkpoints named memory paths, and enforces operator-owned DNA integrity at boot. Agent behavior — mentions, queues, presence, ACP — stays upstream. An agent is a **config file plus a home directory**, never a fork of the runtime.
+
+Buzz is the only channel today. Checkpoint, DNA, and agent homes are intentionally channel-agnostic; a multi-protocol adapter seam is deferred until a second channel exists.
 
 ```bash
 bin/agnova install       # build the pinned upstream, once per machine
@@ -44,14 +46,22 @@ Stock `buzz-acp` — no fork, no patched build, no certificates. Three in-flight
 
 | Layer | Approx. size | Maintained by |
 |---|---|---|
-| Front door, keys/NIP-98, supervise, checkpoint | ~1k lines | this project |
+| Front door, keys/NIP-98, supervise, checkpoint, DNA | ~1k lines | this project |
 | `buzz-acp` — everything an agent *does* | ~34.5k lines | Block |
 
 **Own the stable half, rent the moving half.** Relay protocol is frozen; Buzz agent semantics are not. Improvements arrive by bumping a version pin.
 
+## What the harness owns
+
+- **Supervise** — idempotent `up` / `down` / `doctor` around stock `buzz-acp`
+- **Front door** — optional transport shim for proxied sandboxes ([ADR-001](docs/decisions/adr-001-front-door.md))
+- **Checkpoint** — path-scoped git commit/push (and optional bundle upload); no model, no tokens
+- **DNA** — fail-closed boot integrity against an operator-owned hash
+- **Scaffold** — new agent = env file + home directory + `runtime.lock` pin
+
 ## Memory
 
-Agnova persists an agent's memory; it never decides what belongs in it. `checkpoint.py` commits and pushes named paths on an interval — no model, no tokens. With no paths configured it does nothing on purpose.
+Agnova persists an agent's memory; it never decides what belongs in it. With no checkpoint paths configured it does nothing on purpose.
 
 ## Requirements
 
@@ -66,6 +76,7 @@ Claude Code needs no `ANTHROPIC_API_KEY`: the adapter wraps the Agent SDK and in
 ## Documentation
 
 - [Design](docs/explanation/design.md) — motivation, architecture, trade-offs
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — component contracts
 - [ADR-001](docs/decisions/adr-001-front-door.md) — transport front door, not a protocol shim
 - [Session lifetime](docs/explanation/session-lifetime.md) — idle, reclaim, and what nothing here can prevent
 - [Set up the environment](docs/how-to/set-up-the-environment.md)

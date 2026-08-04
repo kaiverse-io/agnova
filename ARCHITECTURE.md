@@ -8,10 +8,11 @@
 
 ## Executive Summary
 
-Agnova is the agent **runtime harness** for Buzz: it supervises `buzz-acp`, optionally puts a
+Agnova is a **Buzz agent runtime harness**: it supervises stock `buzz-acp`, optionally puts a
 TLS front door in front of the relay, checkpoints named memory paths (git push and/or HTTP
-git-bundle upload), and enforces operator-owned DNA integrity at boot. It must not import
-Aither or Qortia — control plane and memory engine talk over HTTP/OpenAPI only.
+git-bundle upload), and enforces operator-owned DNA integrity at boot. Buzz is the only
+channel today; a multi-protocol adapter seam is deferred. It must not import Aither or
+Qortia — control plane and memory engine talk over HTTP/OpenAPI only.
 
 ## System Overview
 
