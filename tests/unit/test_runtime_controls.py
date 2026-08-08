@@ -12,6 +12,7 @@ from agnova import config, engram, mint_auth_tag, runtime, scaffold, selftest, s
 from agnova.config import AgentConfig
 from agnova.memory import mcp_server
 from agnova.memory.git_backend import GitMemoryBackend
+from agnova.memory.qortia_backend import QortiaMemoryBackend
 
 OWNER_SECRET = "00" * 31 + "01"
 OWNER_PUBKEY = mint_auth_tag.VECTOR["owner_pubkey"]
@@ -204,11 +205,26 @@ def test_mcp_backend_selection(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     monkeypatch.delenv("AGNOVA_HOME", raising=False)
     monkeypatch.setenv("AGENT_MEMORY_BACKEND", "git")
 
-    assert mcp_server._backend().home == tmp_path.resolve()
+    backend = mcp_server._backend()
+    assert isinstance(backend, GitMemoryBackend)
+    assert backend.home == tmp_path.resolve()
+
+    monkeypatch.setenv("AGENT_MEMORY_BACKEND", "unknown-backend")
+    with pytest.raises(SystemExit, match="not implemented"):
+        mcp_server._backend()
 
     monkeypatch.setenv("AGENT_MEMORY_BACKEND", "qortia")
-    with pytest.raises(SystemExit, match="not implemented yet"):
+    monkeypatch.delenv("QORTIA_URL", raising=False)
+    monkeypatch.delenv("QORTIA_API_KEY", raising=False)
+    monkeypatch.delenv("QORTIA_AGENT_ID", raising=False)
+    with pytest.raises(SystemExit, match="QORTIA_URL, QORTIA_API_KEY, QORTIA_AGENT_ID"):
         mcp_server._backend()
+
+    monkeypatch.setenv("QORTIA_URL", "https://qortia.example")
+    monkeypatch.setenv("QORTIA_API_KEY", "key-123")
+    monkeypatch.setenv("QORTIA_AGENT_ID", "11111111-1111-1111-1111-111111111111")
+    qortia_backend = mcp_server._backend()
+    assert isinstance(qortia_backend, QortiaMemoryBackend)
 
 
 def test_mcp_dispatch_covers_tools_and_json_rpc(tmp_path: Path) -> None:
