@@ -24,7 +24,8 @@ or memory engine in-process — those talk over HTTP/OpenAPI only.
   checkpoint loop ──git commit/push──┐                        │
                      └─HTTP git bundle─> control plane         │
                                                               │
-  agnova-memory MCP (stdio) <──git backend──> memory/ files
+  agnova-memory MCP (stdio) ──git backend────> memory/ files
+                             └─qortia backend──> Qortia service (HTTP, /v1/*)
 ```
 
 ## Components
@@ -62,9 +63,15 @@ Depends on: `nostr` for auth material when required.
 
 ## memory
 
-Purpose: `agnova-memory` MCP stdio server + git filesystem backend
-(`context|recall|remember|forget`). Qortia backend deferred.
-Depends on: stdlib + agent home paths. Forbids in-process control-plane / memory-engine imports.
+Purpose: `agnova-memory` MCP stdio server (`context|recall|remember|forget`) selecting one of
+two backends via `AGENT_MEMORY_BACKEND`:
+- `git` (default) — filesystem-backed (`git_backend.py`), durable via `checkpoint`.
+- `qortia` — HTTP client for a standalone Qortia memory service (`qortia_backend.py`), reading
+  `QORTIA_URL` / `QORTIA_API_KEY` / `QORTIA_AGENT_ID` (see ADR-003).
+
+Depends on: stdlib + agent home paths (`git`), stdlib `http.client` (`qortia`). Forbids
+in-process control-plane / memory-engine imports — both backends talk over the filesystem or
+HTTP only, and `.importlinter` fails the build on any `import qortia`.
 
 ## mint_auth_tag
 
@@ -104,6 +111,8 @@ Depends on: network + lockfile.
 
 ## Known Limitations
 
-- Memory MCP `qortia` backend not implemented until Qortia G1 scored evals.
+- Qortia memory backend is verified against Qortia's source contract and mocked HTTP tests
+  only (no in-process import is possible — see `.importlinter`) — not yet exercised end-to-end
+  against a live Qortia instance.
 - Checkpoint upload is best-effort; failures must not kill the agent.
 - Warm Cursor Cloud / Agnova cohabitation is spike-gated (deferred).

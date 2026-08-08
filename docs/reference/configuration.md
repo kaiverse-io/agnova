@@ -56,9 +56,21 @@ for the full set.
 | `AGENT_CHECKPOINT_INTERVAL` | `900` | Seconds between checkpoint ticks (minimum 60). |
 | `AGENT_CHECKPOINT_UPLOAD_URL` | — | Control-plane POST URL for a git bundle (after commit; push still happens if a remote exists). |
 | `AGENT_CHECKPOINT_TOKEN` | — | Bearer token for the upload URL. |
-| `AGENT_MEMORY_BACKEND` | `git` | Backend for `agnova-memory` MCP. Only `git` is implemented until Qortia eval gate. |
+| `AGENT_MEMORY_BACKEND` | `git` | Backend for `agnova-memory` MCP: `git` or `qortia` (see ADR-003). |
 
-Run the memory MCP as `agnova-memory` (stdio). It reads `BUZZ_AGENT_HOME` / `AGNOVA_HOME`.
+Run the memory MCP as `agnova-memory` (stdio). The `git` backend reads `BUZZ_AGENT_HOME` /
+`AGNOVA_HOME`; it is ignored by `qortia`, which holds no filesystem state.
+
+### `AGENT_MEMORY_BACKEND=qortia`
+
+| Variable | Required | Description |
+|---|---|---|
+| `QORTIA_URL` | yes | Base URL of a standalone Qortia memory service, e.g. `https://qortia.your-host`. |
+| `QORTIA_API_KEY` | yes | Bearer token authenticating the *tenant* (sent as `Authorization: Bearer …`). |
+| `QORTIA_AGENT_ID` | yes | UUID of the agent acting within that tenant (sent as `X-Agent-Id`). |
+
+All three are set by the control plane into every agent container; `agnova-memory` fails
+clearly at startup if any are missing while `AGENT_MEMORY_BACKEND=qortia`.
 
 ## Files on disk
 

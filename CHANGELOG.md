@@ -27,6 +27,14 @@ the code that was verified running there.
   against a live relay without spending a token.
 - **NIP-OA minting** (`src/agnova/mint_auth_tag.py`) — owner attestation, run offline
   by a human, self-checked against the spec's published test vector.
+- **Qortia memory backend** (`agnova/memory/qortia_backend.py`) — `agnova-memory`'s
+  second `MemoryBackend`: `context`/`recall`/`remember`/`forget` over a standalone
+  Qortia service's `/v1/*` HTTP API, selected by `AGENT_MEMORY_BACKEND=qortia` and
+  configured via `QORTIA_URL` / `QORTIA_API_KEY` / `QORTIA_AGENT_ID` (the same names
+  the control plane already sets into every agent container). Stdlib `http.client`
+  only, matching `checkpoint.py`'s existing precedent — no new runtime dependency,
+  and no in-process `import qortia` (`.importlinter`-enforced; the two services talk
+  HTTP/OpenAPI only). See ADR-003 for the contract this was verified against.
 - 26 offline unit tests.
 
 ### Fixed

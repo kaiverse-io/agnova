@@ -12,7 +12,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from agnova.memory import MemoryBackend
 from agnova.memory.git_backend import GitMemoryBackend
+from agnova.memory.qortia_backend import QortiaMemoryBackend
+
+_QORTIA_ENV_VARS = ("QORTIA_URL", "QORTIA_API_KEY", "QORTIA_AGENT_ID")
 
 TOOLS = [
     {
@@ -69,22 +73,31 @@ TOOLS = [
 ]
 
 
-def _backend() -> GitMemoryBackend:
-    home = Path(os.environ.get("BUZZ_AGENT_HOME") or os.environ.get("AGNOVA_HOME") or ".").resolve()
+def _backend() -> MemoryBackend:
     name = (os.environ.get("AGENT_MEMORY_BACKEND") or "git").strip().lower()
-    if name != "git":
-        # qortia backend lands after G1; fail clearly rather than pretend.
-        raise SystemExit(
-            f"AGENT_MEMORY_BACKEND={name!r} is not implemented yet — use git (default)"
+    if name == "git":
+        home = Path(
+            os.environ.get("BUZZ_AGENT_HOME") or os.environ.get("AGNOVA_HOME") or "."
+        ).resolve()
+        return GitMemoryBackend(home)
+    if name == "qortia":
+        values = {key: (os.environ.get(key) or "").strip() for key in _QORTIA_ENV_VARS}
+        missing = [key for key, value in values.items() if not value]
+        if missing:
+            # Set by the control plane into every agent container (see
+            # docs/decisions/adr-003-qortia-memory-backend.md) — fail clearly if it didn't.
+            raise SystemExit(f"AGENT_MEMORY_BACKEND=qortia requires {', '.join(missing)} to be set")
+        return QortiaMemoryBackend(
+            values["QORTIA_URL"], values["QORTIA_API_KEY"], values["QORTIA_AGENT_ID"]
         )
-    return GitMemoryBackend(home)
+    raise SystemExit(f"AGENT_MEMORY_BACKEND={name!r} is not implemented — use git or qortia")
 
 
 def _result_text(payload: Any) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}]}
 
 
-def _call_tool(backend: GitMemoryBackend, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def _call_tool(backend: MemoryBackend, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name == "context":
         budget = arguments.get("budget")
         return _result_text({"context": backend.context(int(budget) if budget else None)})
@@ -103,7 +116,7 @@ def _call_tool(backend: GitMemoryBackend, name: str, arguments: dict[str, Any]) 
     raise ValueError(f"unknown tool: {name}")
 
 
-def _handle(backend: GitMemoryBackend, message: dict[str, Any]) -> dict[str, Any] | None:
+def _handle(backend: MemoryBackend, message: dict[str, Any]) -> dict[str, Any] | None:
     mid = message.get("id")
     method = message.get("method")
     params = message.get("params") or {}
