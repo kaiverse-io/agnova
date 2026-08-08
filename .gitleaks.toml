@@ -1,0 +1,8 @@
+title = "gitleaks config"
+
+[allowlist]
+description = "NIP-OA public test vectors and unit fixtures — not live secrets"
+paths = [
+  '''src/agnova/mint_auth_tag.py''',
+  '''tests/''',
+]
