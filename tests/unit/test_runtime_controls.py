@@ -128,6 +128,16 @@ def test_load_merges_file_and_environment_with_host_precedence(
     assert env["BUZZ_AUTH_TAG"] == '["auth"]'
     assert env["AGENT_CHECKPOINT_TOKEN"] == "env-token"
     assert env["AGENT_MEMORY_BACKEND"] == "git"
+    assert env["BUZZ_ACP_MCP_COMMAND"] == "agnova-memory"
+
+
+def test_harness_env_lets_the_agents_own_env_claim_the_mcp_slot(tmp_path: Path) -> None:
+    """buzz-acp's --mcp-command is a single slot (no --mcp-args, unlike
+    --agent-command/--agent-args) — an operator who wants something other
+    than agnova-memory there must still be able to have it."""
+    cfg = _cfg(tmp_path, env={"BUZZ_ACP_MCP_COMMAND": "buzz-cli"})
+
+    assert cfg.harness_env()["BUZZ_ACP_MCP_COMMAND"] == "buzz-cli"
 
 
 def test_load_reports_actionable_errors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

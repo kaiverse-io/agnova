@@ -7,7 +7,12 @@ repos:
 
   # Python linting + formatting (Astral)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    # Kept in sync with the ruff version uv.lock actually resolves (see
+    # `just ci-lint`'s `uv run ruff check .`) -- the previous v0.6.9 pin was
+    # a full year stale and flagged findings (e.g. S603 on subprocess.run
+    # calls already justified with a # noqa-equivalent comment) that the
+    # project's real, tested ruff version does not.
+    rev: v0.16.1
     hooks:
       - id: ruff
         args: [--fix]

@@ -81,12 +81,15 @@ def _config(home: Path, **overrides: Any) -> AgentConfig:
 # launcher writes is dead code in this pipeline.
 
 
-@pytest.mark.xfail(strict=True, reason="BUZZ_ACP_MCP_COMMAND is never set by harness_env()")
 def test_harness_env_registers_the_memory_mcp_server(tmp_path: Path) -> None:
     """`agnova up` must hand buzz-acp a command that serves agnova-memory.
 
     Without this the agent has no context/recall/remember/forget at all, and
     every backend behind AGENT_MEMORY_BACKEND is unreachable code.
+
+    Fixed: harness_env() now sets BUZZ_ACP_MCP_COMMAND (setdefault, so an
+    operator's own .env can still claim the single MCP-server slot for
+    something else — see the comment in AgentConfig.harness_env()).
     """
     env = _config(tmp_path).harness_env()
 
@@ -97,18 +100,17 @@ def test_harness_env_registers_the_memory_mcp_server(tmp_path: Path) -> None:
     assert "agnova-memory" in env["BUZZ_ACP_MCP_COMMAND"]
 
 
-@pytest.mark.xfail(strict=True, reason="AGENT_MEMORY_BACKEND is set but nothing reads it")
 def test_qortia_backend_selection_reaches_the_harness(tmp_path: Path) -> None:
     """Choosing the qortia backend must actually change what the agent can do.
 
-    Today `memory_backend="qortia"` only sets an env var read by a process
-    nothing launches — a config knob wired to nothing.
+    Fixed alongside the harness_env() change above: AGENT_MEMORY_BACKEND is
+    now read by agnova-memory, which is now actually launched.
     """
     env = _config(tmp_path, memory_backend="qortia").harness_env()
 
     assert env["AGENT_MEMORY_BACKEND"] == "qortia"
     assert env.get("BUZZ_ACP_MCP_COMMAND"), (
-        "AGENT_MEMORY_BACKEND=qortia is inert: no MCP command means no process " "ever reads it"
+        "AGENT_MEMORY_BACKEND=qortia is inert: no MCP command means no process ever reads it"
     )
 
 
@@ -238,9 +240,9 @@ def test_context_does_not_cut_a_record_mid_sentence(
 
     out = backend.context(budget=1200)
 
-    assert (
-        out.endswith(("\n", ".", "]", ")")) or "omitted" in out.lower()
-    ), "context() ends mid-token with no marker saying anything was dropped"
+    assert out.endswith(("\n", ".", "]", ")")) or "omitted" in out.lower(), (
+        "context() ends mid-token with no marker saying anything was dropped"
+    )
 
 
 # ── F4 · git recall returns whole documents ─────────────────────────────────
@@ -277,9 +279,9 @@ def test_recall_ranks_results(tmp_path: Path) -> None:
 
     hits = GitMemoryBackend(tmp_path).recall("frontdoor")
 
-    assert (
-        "the real answer" in hits[0].content
-    ), "results come back in glob order; there is no scoring of any kind"
+    assert "the real answer" in hits[0].content, (
+        "results come back in glob order; there is no scoring of any kind"
+    )
 
 
 # ── F5 · consolidation is not reachable from the agent ──────────────────────
@@ -326,6 +328,6 @@ def test_scaffold_writes_a_knowledge_index(tmp_path: Path) -> None:
     """knowledge/ accumulates by design; without an index it must be read whole or grepped."""
     init("scout", tmp_path, owner="abc", relay="wss://relay.example")
 
-    assert (
-        tmp_path / "knowledge" / "INDEX.md"
-    ).is_file(), "knowledge/ ships a prose README but no one-line-per-entry index"
+    assert (tmp_path / "knowledge" / "INDEX.md").is_file(), (
+        "knowledge/ ships a prose README but no one-line-per-entry index"
+    )
