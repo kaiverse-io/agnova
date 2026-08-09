@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from agnova.memory import MemoryItem
+from agnova.memory import DEFAULT_MEMORY_TYPE, MemoryItem
 
 _ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
@@ -59,7 +59,7 @@ class GitMemoryBackend:
             if needle not in text.lower():
                 continue
             mid = path.stem if path.parent == self.entries_dir else f"file:{path.name}"
-            hits.append(MemoryItem(id=mid, content=text.strip(), type="note"))
+            hits.append(MemoryItem(id=mid, content=text.strip(), type=DEFAULT_MEMORY_TYPE))
             if len(hits) >= 20:
                 break
         return hits
@@ -75,7 +75,7 @@ class GitMemoryBackend:
             if not content:
                 continue
             mid = self._safe_id(str(raw.get("id") or uuid.uuid4().hex[:12]))
-            mtype = str(raw.get("type") or "note")
+            mtype = str(raw.get("type") or DEFAULT_MEMORY_TYPE)
             raw_meta = raw.get("metadata")
             meta: dict[str, Any] = dict(raw_meta) if isinstance(raw_meta, dict) else {}
             body = f"---\nid: {mid}\ntype: {mtype}\n---\n\n{content}\n"
@@ -88,9 +88,27 @@ class GitMemoryBackend:
         return stored
 
     def forget(self, memory_id: str) -> bool:
+        """Remove the entry file *and* its pointer line from whichever daily
+        log remember() wrote it into — recall() searches both, so leaving
+        the pointer behind makes a forgotten memory still recallable via
+        its daily-log copy of the content."""
         mid = self._safe_id(memory_id)
         path = self.entries_dir / f"{mid}.md"
-        if not path.is_file():
-            return False
-        path.unlink()
-        return True
+        found = path.is_file()
+        if found:
+            path.unlink()
+
+        if self.memory_dir.is_dir():
+            marker = f"- [{mid}] "
+            for daily in self.memory_dir.glob("*.md"):
+                try:
+                    text = daily.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                lines = text.splitlines(keepends=True)
+                kept = [ln for ln in lines if not ln.startswith(marker)]
+                if len(kept) != len(lines):
+                    found = True
+                    daily.write_text("".join(kept), encoding="utf-8")
+
+        return found

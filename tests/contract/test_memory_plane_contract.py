@@ -126,9 +126,13 @@ def test_qortia_backend_selection_reaches_the_harness(tmp_path: Path) -> None:
 # backend, where omitting it 422s the whole batch.
 
 
-@pytest.mark.xfail(strict=True, reason="MemoryItem.type defaults to 'note', outside Qortia's enum")
 def test_default_memory_type_is_valid_on_every_backend() -> None:
-    """A remember() that succeeds on `git` must not 422 the batch on `qortia`."""
+    """A remember() that succeeds on `git` must not 422 the batch on `qortia`.
+
+    Fixed: MemoryItem.type now defaults to DEFAULT_MEMORY_TYPE = "episodic"
+    (Qortia's lowest-importance-prior type — the closest fit for "an agent
+    stored something without saying what kind"), not "note".
+    """
     default_type = MemoryItem(id="x", content="y").type
 
     assert default_type in QORTIA_TYPES, (
@@ -138,9 +142,12 @@ def test_default_memory_type_is_valid_on_every_backend() -> None:
     )
 
 
-@pytest.mark.xfail(strict=True, reason="GitMemoryBackend stamps type='note' by default")
 def test_git_backend_writes_types_qortia_accepts(tmp_path: Path) -> None:
-    """The default backend must not mint a vocabulary the other one rejects."""
+    """The default backend must not mint a vocabulary the other one rejects.
+
+    Fixed: git_backend.py now imports DEFAULT_MEMORY_TYPE from agnova.memory
+    instead of hardcoding its own "note" fallback.
+    """
     stored = GitMemoryBackend(tmp_path).remember(
         [{"content": "the relay rejects loopback-signed NIP-98 tokens on purpose"}]
     )
@@ -151,14 +158,13 @@ def test_git_backend_writes_types_qortia_accepts(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.xfail(strict=True, reason="remember's type schema is a bare {'type': 'string'}")
 def test_mcp_schema_publishes_the_memory_type_enum() -> None:
     """The agent must be able to read the vocabulary, not guess it.
 
     A tool whose schema says `{"type": "string"}` for a closed six-value enum
-    is a tool the model will call wrongly and then stop calling — and, per
-    F2 above, "wrongly" here means the omission itself 422s on qortia, since
-    `type` is not even in the item's `required` list.
+    is a tool the model will call wrongly and then stop calling. Fixed: the
+    `remember` tool's item schema now publishes MEMORY_TYPES as a JSON Schema
+    `enum`.
     """
     remember = next(t for t in TOOLS if t["name"] == "remember")
     item = remember["inputSchema"]["properties"]["items"]["items"]
@@ -171,7 +177,6 @@ def test_mcp_schema_publishes_the_memory_type_enum() -> None:
     assert set(type_schema["enum"]) == QORTIA_TYPES
 
 
-@pytest.mark.xfail(strict=True, reason="the 5-word floor and ttl_seconds rule are undocumented")
 def test_mcp_schema_documents_qortias_write_constraints() -> None:
     """Qortia rejects <5-word content and requires ttl_seconds for short_term.
 
