@@ -20,36 +20,46 @@ _RECALL_MAX_HITS = 20
 _RECALL_MAX_TOTAL_CHARS = 4000  # hard cap across all returned snippets combined
 
 
-def _snippet(text: str, needle: str, *, window: int = _SNIPPET_WINDOW) -> tuple[str, int]:
+def _snippet(text: str, terms: list[str], *, window: int = _SNIPPET_WINDOW) -> tuple[str, int]:
     """Windows of context around each match, joined — never the whole file.
 
-    Returns (snippet_text, match_count). Matching is case-insensitive; the
-    windows are cut from the original (not lower-cased) text so casing in
-    the returned snippet matches the source.
+    `terms` are ANDed and word-boundary matched (case-insensitive): every
+    term must appear as a whole word somewhere in the text, or the file
+    doesn't qualify at all — the old behaviour treated the *entire* query as
+    one literal substring (`recall("rate limiting AuthService")` matched
+    only if that exact phrase appeared verbatim, so ordinary multi-word
+    queries returned nothing unless they happened to quote the source
+    exactly), and matched raw substrings with no word boundary (a query for
+    "cat" matched inside "category"), which could let an unrelated file
+    outrank the real answer purely by containing the query as a substring
+    of a longer, unrelated word many times.
+
+    Returns (snippet_text, match_count) — match_count sums occurrences
+    across all terms and is the primary ranking key in recall().
     """
-    lower = text.lower()
-    positions = []
-    start = 0
-    while True:
-        idx = lower.find(needle, start)
-        if idx == -1:
-            break
-        positions.append(idx)
-        start = idx + len(needle)
-    if not positions:
+    if not terms:
         return "", 0
 
+    matches: list[tuple[int, int]] = []  # (position, matched length)
+    for term in terms:
+        pattern = re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
+        term_matches = [(m.start(), len(term)) for m in pattern.finditer(text)]
+        if not term_matches:
+            return "", 0  # AND semantics: every term must be present
+        matches.extend(term_matches)
+    matches.sort(key=lambda m: m[0])
+
     windows: list[str] = []
-    for idx in positions[:_SNIPPET_MAX_MATCHES]:
+    for idx, length in matches[:_SNIPPET_MAX_MATCHES]:
         lo = max(0, idx - window)
-        hi = min(len(text), idx + len(needle) + window)
+        hi = min(len(text), idx + length + window)
         piece = text[lo:hi].strip()
         windows.append(f"…{piece}…" if lo > 0 or hi < len(text) else piece)
-    remaining = len(positions) - len(windows)
+    remaining = len(matches) - len(windows)
     joined = "\n[...]\n".join(windows)
     if remaining > 0:
         joined += f"\n[... {remaining} more match{'es' if remaining != 1 else ''} in this file ...]"
-    return joined, len(positions)
+    return joined, len(matches)
 
 
 class GitMemoryBackend:
@@ -82,10 +92,18 @@ class GitMemoryBackend:
         recency — never a whole file. The old behaviour returned
         `content=text.strip()` on any hit, so recall against a mature
         MEMORY.md returned all of MEMORY.md: a retrieval step that could
-        cost more context than skipping retrieval entirely."""
+        cost more context than skipping retrieval entirely.
+
+        The query is split into words and ANDed, word-boundary matched
+        (see `_snippet`) — not treated as one literal phrase. A query for
+        "rate limiting AuthService" now matches a file mentioning all three
+        words in any order/position, not only a file containing that exact
+        substring verbatim (evals/run_recall_eval.py caught this: every
+        multi-word query in the eval dataset returned zero results under
+        the old whole-phrase-substring behaviour)."""
         del filters  # reserved for qortia backend
-        needle = query.lower().strip()
-        if not needle:
+        terms = re.findall(r"\w+", query.lower())
+        if not terms:
             return []
         paths: list[Path] = []
         if self.memory_md.is_file():
@@ -102,7 +120,7 @@ class GitMemoryBackend:
                 mtime = path.stat().st_mtime
             except OSError:
                 continue
-            snippet, count = _snippet(text, needle)
+            snippet, count = _snippet(text, terms)
             if count == 0:
                 continue
             mid = path.stem if path.parent == self.entries_dir else f"file:{path.name}"
@@ -112,10 +130,15 @@ class GitMemoryBackend:
         # recency as a proxy for relevance when match count doesn't decide.
         scored.sort(key=lambda row: (row[0], row[1]), reverse=True)
 
+        # Checked *before* adding, not after: checking post-hoc lets the one
+        # snippet that crosses the line still get included in full, so the
+        # combined total can exceed the "hard cap" the constant promises
+        # (evals/run_recall_eval.py's geh-010 caught this: 4022 chars back
+        # when the check ran after appending).
         hits: list[MemoryItem] = []
         total_chars = 0
         for _count, _mtime, mid, snippet in scored[:_RECALL_MAX_HITS]:
-            if total_chars >= _RECALL_MAX_TOTAL_CHARS:
+            if total_chars + len(snippet) > _RECALL_MAX_TOTAL_CHARS:
                 break
             hits.append(MemoryItem(id=mid, content=snippet, type=DEFAULT_MEMORY_TYPE))
             total_chars += len(snippet)
