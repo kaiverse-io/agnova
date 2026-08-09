@@ -804,6 +804,68 @@ def test_supervise_doctor_status_logs_and_down(
     assert stopped == ["harness", "frontdoor", "checkpoint"]
 
 
+def test_doctor_flags_missing_qortia_env_when_backend_is_qortia(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
+    monkeypatch.setattr(supervise, "ROOT", tmp_path)
+    monkeypatch.delenv("QORTIA_URL", raising=False)
+    monkeypatch.delenv("QORTIA_API_KEY", raising=False)
+    monkeypatch.delenv("QORTIA_AGENT_ID", raising=False)
+    cfg = _cfg(tmp_path, memory_backend="qortia")
+    cfg.var.mkdir(parents=True)
+    monkeypatch.setattr(supervise, "buzz_acp_binary", lambda: "/bin/buzz-acp")
+    monkeypatch.setattr(supervise.shutil, "which", lambda name: "/bin/x")
+    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: None)
+
+    problems = supervise.doctor(cfg)
+
+    out = capsys.readouterr().out
+    assert "QORTIA_URL" in out and "QORTIA_API_KEY" in out and "QORTIA_AGENT_ID" in out
+    assert problems >= 1
+
+
+def test_doctor_warns_on_a_large_memory_md(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
+    monkeypatch.setattr(supervise, "ROOT", tmp_path)
+    cfg = _cfg(tmp_path)  # memory_backend defaults to "git"
+    cfg.var.mkdir(parents=True)
+    (tmp_path / "MEMORY.md").write_text("x" * 60_000, encoding="utf-8")
+    monkeypatch.setattr(supervise, "buzz_acp_binary", lambda: "/bin/buzz-acp")
+    monkeypatch.setattr(supervise.shutil, "which", lambda name: "/bin/x")
+    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: None)
+
+    supervise.doctor(cfg)
+
+    out = capsys.readouterr().out
+    assert "MEMORY.md is 60,000 bytes" in out
+    assert "consider promoting/trimming" in out
+
+
+def test_doctor_reports_the_registered_mcp_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
+    monkeypatch.setattr(supervise, "ROOT", tmp_path)
+    cfg = _cfg(tmp_path)
+    cfg.var.mkdir(parents=True)
+    monkeypatch.setattr(supervise, "buzz_acp_binary", lambda: "/bin/buzz-acp")
+    monkeypatch.setattr(supervise.shutil, "which", lambda name: "/bin/x")
+    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: None)
+
+    problems_before = supervise.doctor(cfg)
+
+    out = capsys.readouterr().out
+    assert "BUZZ_ACP_MCP_COMMAND='agnova-memory'" in out
+    assert "agnova selftest --memory" in out
+    assert problems_before == 0
+
+
 def test_supervise_up_starts_needed_services_and_reports_failures(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

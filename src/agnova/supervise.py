@@ -137,6 +137,53 @@ def buzz_acp_binary() -> str | None:
     return None
 
 
+def _doctor_memory(cfg: AgentConfig) -> int:
+    """Static memory-plane checks — is a backend selected, is its config
+    complete, is the MCP command actually registered. Doesn't spend a token
+    or touch the network; `agnova selftest --memory` is the live version of
+    this same question."""
+    problems = 0
+
+    mcp_command = cfg.harness_env().get("BUZZ_ACP_MCP_COMMAND", "")
+    if mcp_command:
+        ok(f"BUZZ_ACP_MCP_COMMAND={mcp_command!r} — buzz-acp will register a memory MCP server")
+    else:
+        bad(
+            "BUZZ_ACP_MCP_COMMAND is empty — buzz-acp registers no MCP servers, "
+            "so the agent has no memory tools at all"
+        )
+        problems += 1
+
+    if cfg.memory_backend == "qortia":
+        missing = [
+            v for v in ("QORTIA_URL", "QORTIA_API_KEY", "QORTIA_AGENT_ID") if not os.environ.get(v)
+        ]
+        if missing:
+            bad(
+                f"AGENT_MEMORY_BACKEND=qortia but {', '.join(missing)} unset — "
+                "agnova-memory will SystemExit as soon as a tool call resolves the backend"
+            )
+            problems += 1
+        else:
+            ok("qortia backend: QORTIA_URL/QORTIA_API_KEY/QORTIA_AGENT_ID all present")
+        return problems
+
+    ok(f"memory backend: {cfg.memory_backend}")
+    memory_md = cfg.home / "MEMORY.md"
+    if memory_md.is_file():
+        size = memory_md.stat().st_size
+        # No enforced ceiling — AGENTS.md's own Session Startup step 5 reads
+        # this file in full every session, so an operator needs the number to
+        # judge staleness for themselves; there is no automated eviction on
+        # the git backend (see GitMemoryBackend.reflect()'s docstring).
+        big = size > 50_000
+        (warn if big else ok)(
+            f"MEMORY.md is {size:,} bytes"
+            + (" — read in full every session; consider promoting/trimming" if big else "")
+        )
+    return problems
+
+
 def doctor(cfg: AgentConfig) -> int:
     """Diagnose without changing anything. Never exits non-zero for 'not running'."""
     problems = 0
@@ -157,19 +204,21 @@ def doctor(cfg: AgentConfig) -> int:
         problems += 1
 
     # buzz-acp publishes replies itself, over its own relay socket. buzz-cli is
-    # only the agent's *tool* surface, and only when wired up as an MCP server
-    # via BUZZ_ACP_MCP_COMMAND — which is empty by default. Verified against
-    # buzz-acp v0.5.2: an empty mcp_command registers no MCP servers at all.
+    # the agent's *other* would-be tool surface, and shares the single
+    # BUZZ_ACP_MCP_COMMAND slot with agnova-memory (see harness_env()) — not
+    # built by `agnova install` today, so this is silent by default rather
+    # than a warning about a slot nothing is contending for.
     if shutil.which("buzz"):
-        ok("buzz-cli on PATH (optional — the agent's tool surface, via BUZZ_ACP_MCP_COMMAND)")
-    else:
-        warn("buzz-cli not on PATH — replies still work; the agent just has no Buzz tools")
+        ok("buzz-cli on PATH (shares the MCP slot with agnova-memory — see harness_env())")
 
     if shutil.which(cfg.agent_command):
         ok(f"agent command `{cfg.agent_command}` on PATH")
     else:
         bad(f"agent command `{cfg.agent_command}` not found — run `./agent install`")
         problems += 1
+
+    problems += _doctor_memory(cfg)
+    print(f"{DIM}memory{RESET} verify with `agnova selftest --memory {cfg.name}`")
 
     if not cfg.owner_pubkey and cfg.respond_to == "owner-only":
         bad(
