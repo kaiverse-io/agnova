@@ -18,9 +18,14 @@ import base64
 import http.client
 import json
 import os
+import select
+import shutil
 import socket
+import subprocess
 import sys
+import uuid
 from pathlib import Path
+from typing import Any
 
 import coincurve
 
@@ -80,7 +85,12 @@ def query(port: int, secret: coincurve.PrivateKey) -> tuple[bool, str]:
 
 
 def main() -> None:
-    run(sys.argv[1] if len(sys.argv) > 1 else None)
+    args = [a for a in sys.argv[1:] if a != "--memory"]
+    agent = args[0] if args else None
+    if "--memory" in sys.argv[1:]:
+        run_memory(agent)
+    else:
+        run(agent)
 
 
 def run(agent: str | None) -> None:
@@ -99,6 +109,137 @@ def run(agent: str | None) -> None:
 
     if failures:
         print("\nIs the front door up? `just up` or `just doctor`.")
+    sys.exit(1 if failures else 0)
+
+
+# ── memory: prove agnova-memory works, without buzz-acp or a token ─────────
+#
+# Same instinct as the transport check above, applied to the plane the
+# memory-plane review found had no proof at all: `just ci-test` is green
+# with qortia_backend.py at 100% coverage while an agent launched by
+# `agnova up` had no memory tools at all, because nothing exercised the
+# actual subprocess+stdio+JSON-RPC path buzz-acp drives. This does —
+# spawning the real `agnova-memory` console script, speaking the real
+# protocol, in the order things break: does the process start, does it
+# answer initialize, does tools/list include what it should, does a
+# memory written really come back out.
+
+
+class _RpcError(RuntimeError):
+    pass
+
+
+def _rpc_send(proc: subprocess.Popen[str], method: str, params: dict[str, Any]) -> int:
+    msg_id = uuid.uuid4().int & 0xFFFF
+    assert proc.stdin is not None
+    proc.stdin.write(
+        json.dumps({"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params}) + "\n"
+    )
+    proc.stdin.flush()
+    return msg_id
+
+
+def _rpc_recv(proc: subprocess.Popen[str], expect_id: int, timeout: float = 10.0) -> dict[str, Any]:
+    assert proc.stdout is not None
+    ready, _, _ = select.select([proc.stdout], [], [], timeout)
+    if not ready:
+        raise _RpcError(f"no response within {timeout}s (id={expect_id})")
+    line = proc.stdout.readline()
+    if not line:
+        stderr = proc.stderr.read() if proc.stderr else ""
+        raise _RpcError(f"agnova-memory exited — stderr: {stderr[:400]}")
+    reply: dict[str, Any] = json.loads(line)
+    if reply.get("id") != expect_id:
+        raise _RpcError(f"reply id {reply.get('id')} != request id {expect_id}")
+    if "error" in reply:
+        raise _RpcError(str(reply["error"]))
+    return reply
+
+
+def _rpc_call(proc: subprocess.Popen[str], method: str, params: dict[str, Any]) -> dict[str, Any]:
+    msg_id = _rpc_send(proc, method, params)
+    return _rpc_recv(proc, msg_id)
+
+
+def run_memory(agent: str | None) -> None:
+    cfg = agent_config.load(agent)
+    env = cfg.harness_env()
+    backend_name = env.get("AGENT_MEMORY_BACKEND", "git")
+    print(f"agent {cfg.name}   backend {backend_name}\n")
+
+    binary = shutil.which("agnova-memory")
+    if not binary:
+        bad("agnova-memory not on PATH — is agnova installed? (pip install -e . / uv sync)")
+        sys.exit(1)
+
+    # S603: argv is the resolved agnova-memory console script, never network input.
+    proc = subprocess.Popen(  # noqa: S603
+        [binary],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+        env=env,
+        cwd=str(cfg.home),
+    )
+
+    steps: list[tuple[str, Any]] = []
+    marker = f"agnova-selftest-{uuid.uuid4().hex[:10]}"
+    memory_id = ""
+    try:
+        init = _rpc_call(proc, "initialize", {})
+        steps.append(("initialize", init["result"]["serverInfo"]["name"] == "agnova-memory"))
+
+        listed = _rpc_call(proc, "tools/list", {})
+        names = {t["name"] for t in listed["result"]["tools"]}
+        expected = {"context", "recall", "remember", "forget", "reflect"}
+        steps.append(("tools/list has context/recall/remember/forget/reflect", expected <= names))
+
+        remembered = _rpc_call(
+            proc,
+            "tools/call",
+            {
+                "name": "remember",
+                "arguments": {"items": [{"content": f"selftest memory containing {marker}"}]},
+            },
+        )
+        remember_payload = json.loads(remembered["result"]["content"][0]["text"])
+        remember_ok = not remembered["result"].get("isError") and bool(remember_payload)
+        steps.append(("remember stores a memory", remember_ok))
+        if remember_ok:
+            memory_id = remember_payload[0]["id"]
+
+        recalled = _rpc_call(proc, "tools/call", {"name": "recall", "arguments": {"query": marker}})
+        recall_payload = json.loads(recalled["result"]["content"][0]["text"])
+        found = any(marker in item.get("content", "") for item in recall_payload)
+        steps.append(("recall finds what remember stored", found))
+
+        if memory_id:
+            forgotten = _rpc_call(
+                proc, "tools/call", {"name": "forget", "arguments": {"id": memory_id}}
+            )
+            forget_payload = json.loads(forgotten["result"]["content"][0]["text"])
+            steps.append(("forget removes it", forget_payload.get("forgotten") is True))
+        else:
+            steps.append(("forget removes it", False))
+
+    except (_RpcError, KeyError, IndexError, json.JSONDecodeError) as exc:
+        steps.append((f"protocol error: {exc}", False))
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+    failures = 0
+    for label, passed in steps:
+        (ok if passed else bad)(label)
+        failures += not passed
+        if not passed:
+            break  # in the order things break — later steps depend on earlier ones
+
     sys.exit(1 if failures else 0)
 
 

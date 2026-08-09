@@ -379,7 +379,9 @@ def _hostwide(command: str, agent: str | None) -> int | None:
     return None
 
 
-def _agent_command(command: str, cfg: AgentConfig, lines: int, publish: bool = False) -> int:
+def _agent_command(
+    command: str, cfg: AgentConfig, lines: int, publish: bool = False, memory: bool = False
+) -> int:
     from agnova import selftest
 
     if command == "up":
@@ -394,7 +396,10 @@ def _agent_command(command: str, cfg: AgentConfig, lines: int, publish: bool = F
     if command == "logs":
         return logs(cfg, lines)
     if command == "selftest":
-        selftest.run(cfg.name)
+        if memory:
+            selftest.run_memory(cfg.name)
+        else:
+            selftest.run(cfg.name)
         return 0
     if command == "engram":
         from agnova import engram
@@ -439,13 +444,23 @@ def main() -> None:
         action="store_true",
         help="engram: publish to the relay instead of printing",
     )
+    parser.add_argument(
+        "--memory",
+        action="store_true",
+        help="selftest: prove agnova-memory works (spawn it, speak MCP over stdio) "
+        "instead of the transport check",
+    )
     args = parser.parse_args()
 
     code = _hostwide(args.command, args.agent)
     if code is not None:
         sys.exit(code)
 
-    sys.exit(_agent_command(args.command, agent_config.load(args.agent), args.lines, args.publish))
+    sys.exit(
+        _agent_command(
+            args.command, agent_config.load(args.agent), args.lines, args.publish, args.memory
+        )
+    )
 
 
 if __name__ == "__main__":
