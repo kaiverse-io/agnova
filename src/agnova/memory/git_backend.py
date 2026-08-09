@@ -201,3 +201,11 @@ class GitMemoryBackend:
         naive caller doesn't crash switching backends; it just has nothing
         to report."""
         return {"memories_written": 0, "reflection_counter": 0}
+
+    def outcome(self, result: str) -> bool:
+        """No confidence model to decay on this backend — files don't carry
+        a confidence_multiplier the way Qortia's memories do. Present on the
+        Protocol (and the outcome MCP tool) so a naive caller doesn't crash
+        switching backends; it just has nothing to record."""
+        del result
+        return False

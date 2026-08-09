@@ -23,6 +23,12 @@ MEMORY_TYPES = frozenset(
 # calling agent.
 DEFAULT_MEMORY_TYPE = "episodic"
 
+# Qortia's OutcomeRequest.outcome (qortia/src/qortia/models.py) — the three
+# values `/v1/outcome` accepts. Mirrored here so mcp_server.py's `outcome`
+# tool schema and any caller validating client-side share one source of
+# truth, the same pattern MEMORY_TYPES already sets for `remember`.
+OUTCOME_VALUES = frozenset({"SUCCESS", "MINOR_FAILURE", "CRITICAL_FAILURE"})
+
 
 @dataclass
 class MemoryItem:
@@ -42,3 +48,5 @@ class MemoryBackend(Protocol):
     def forget(self, memory_id: str) -> bool: ...
 
     def reflect(self) -> dict[str, int]: ...
+
+    def outcome(self, result: str) -> bool: ...

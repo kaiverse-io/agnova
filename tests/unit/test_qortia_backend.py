@@ -315,6 +315,69 @@ def test_2xx_empty_body_is_treated_as_empty_object(monkeypatch: pytest.MonkeyPat
     assert _backend().forget("mem-1") is True
 
 
+# ── work order id ────────────────────────────────────────────────────────────
+
+
+def test_recall_and_remember_send_the_same_work_order_id_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One backend instance = one work order (see the constructor docstring)
+    — recall() and remember() must agree on the id, or Qortia's confidence
+    decay (ADR-125) would attribute a session's reads to the wrong order."""
+    captured = _install(monkeypatch, 200, {"results": []})
+    backend = _backend()
+
+    backend.recall("dharma")
+    recall_headers = captured.request[3] if captured.request else {}
+
+    captured2 = _install(monkeypatch, 200, {"ids": ["mem-1"]})
+    backend.remember([{"type": "episodic", "content": "learned about dharma today"}])
+    remember_headers = captured2.request[3] if captured2.request else {}
+
+    assert recall_headers["X-Work-Order-Id"] == remember_headers["X-Work-Order-Id"]
+    assert recall_headers["X-Work-Order-Id"]  # non-empty
+
+
+def test_work_order_id_is_overridable_at_construction(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _install(monkeypatch, 200, {"results": []})
+    backend = QortiaMemoryBackend(
+        "https://qortia.example", "key-123", "agent-abc", work_order_id="fixed-wo-1"
+    )
+
+    backend.recall("dharma")
+
+    assert captured.request is not None
+    assert captured.request[3]["X-Work-Order-Id"] == "fixed-wo-1"
+
+
+# ── outcome ──────────────────────────────────────────────────────────────────
+
+
+def test_outcome_posts_the_work_order_and_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _install(monkeypatch, 200, {"work_order_id": "fixed-wo-1", "outcome": "SUCCESS"})
+    backend = QortiaMemoryBackend(
+        "https://qortia.example", "key-123", "agent-abc", work_order_id="fixed-wo-1"
+    )
+
+    result = backend.outcome("SUCCESS")
+
+    assert result is True
+    assert captured.request is not None
+    method, path, _body, _headers = captured.request
+    assert (method, path) == ("POST", "/v1/outcome")
+    assert captured.sent_json() == {"work_order_id": "fixed-wo-1", "outcome": "SUCCESS"}
+
+
+def test_outcome_propagates_a_rejected_value_as_qortia_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`outcome()` doesn't validate client-side (see agnova.memory.OUTCOME_VALUES) —
+    Qortia is authoritative and 422s anything else."""
+    _install(monkeypatch, 422, {"detail": "invalid outcome"})
+    with pytest.raises(QortiaError, match="422"):
+        _backend().outcome("MAYBE")
+
+
 # ── error paths shared by all four operations ────────────────────────────────
 
 

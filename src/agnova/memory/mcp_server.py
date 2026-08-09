@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agnova.memory import MEMORY_TYPES, MemoryBackend
+from agnova.memory import MEMORY_TYPES, OUTCOME_VALUES, MemoryBackend
 from agnova.memory.git_backend import GitMemoryBackend
 from agnova.memory.qortia_backend import QortiaMemoryBackend
 
@@ -107,6 +107,23 @@ TOOLS = [
         ),
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "outcome",
+        "description": (
+            "Report whether this session's work succeeded — on the qortia backend, "
+            "decays confidence on every memory this session's recall() calls touched "
+            "(SUCCESS nudges it up; MINOR_FAILURE/CRITICAL_FAILURE down). No-op on "
+            "the git backend, which has no confidence model. Call once, when the "
+            "work concludes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["result"],
+            "properties": {
+                "result": {"type": "string", "enum": sorted(OUTCOME_VALUES)},
+            },
+        },
+    },
 ]
 
 
@@ -152,6 +169,9 @@ def _call_tool(backend: MemoryBackend, name: str, arguments: dict[str, Any]) -> 
         return _result_text({"forgotten": ok})
     if name == "reflect":
         return _result_text(backend.reflect())
+    if name == "outcome":
+        ok = backend.outcome(str(arguments.get("result", "")))
+        return _result_text({"recorded": ok})
     raise ValueError(f"unknown tool: {name}")
 
 

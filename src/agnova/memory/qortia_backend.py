@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import uuid
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
@@ -66,7 +67,13 @@ class QortiaMemoryBackend:
     """
 
     def __init__(
-        self, base_url: str, api_key: str, agent_id: str, *, timeout: float = _TIMEOUT
+        self,
+        base_url: str,
+        api_key: str,
+        agent_id: str,
+        *,
+        timeout: float = _TIMEOUT,
+        work_order_id: str | None = None,
     ) -> None:
         parsed = urlparse(base_url)
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
@@ -82,6 +89,15 @@ class QortiaMemoryBackend:
         self._api_key = api_key
         self._agent_id = agent_id
         self._timeout = timeout
+        # One work order per backend instance — Qortia's `X-Work-Order-Id`
+        # header on /v1/recall and /v1/remember correlates which memories a
+        # unit of work touched, so `outcome()` can decay confidence on the
+        # right ones (qortia recall.py `_record_work_order_outcome`, ADR-125
+        # Phase 2). A backend instance lives for one agnova-memory process
+        # (mcp_server.py creates it once at startup and reuses it), which is
+        # as reasonable a "unit of work" boundary as this client has —
+        # nothing upstream of it currently has a finer-grained concept.
+        self._work_order_id = work_order_id or str(uuid.uuid4())
 
     # ── wire ─────────────────────────────────────────────────────────────
 
@@ -89,13 +105,19 @@ class QortiaMemoryBackend:
         return f"{self._base_path}{endpoint}" if self._base_path else endpoint
 
     def _request(
-        self, method: str, endpoint: str, payload: dict[str, Any] | None
+        self,
+        method: str,
+        endpoint: str,
+        payload: dict[str, Any] | None,
+        *,
+        extra_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "X-Agent-Id": self._agent_id,
             "Accept": "application/json",
+            **(extra_headers or {}),
         }
         if body is not None:
             headers["Content-Type"] = "application/json"
@@ -157,7 +179,9 @@ class QortiaMemoryBackend:
         for key, value in (filters or {}).items():
             if key in _RECALL_FILTER_FIELDS and value is not None:
                 payload[key] = value
-        data = self._request("POST", "/v1/recall", payload)
+        data = self._request(
+            "POST", "/v1/recall", payload, extra_headers={"X-Work-Order-Id": self._work_order_id}
+        )
         items: list[MemoryItem] = []
         for result in data.get("results") or []:
             meta = {key: result[key] for key in _RECALL_META_FIELDS if result.get(key) is not None}
@@ -182,7 +206,12 @@ class QortiaMemoryBackend:
             }
             for raw in items
         ]
-        data = self._request("POST", "/v1/remember", {"memories": memories})
+        data = self._request(
+            "POST",
+            "/v1/remember",
+            {"memories": memories},
+            extra_headers={"X-Work-Order-Id": self._work_order_id},
+        )
         ids = data.get("ids") or []
         stored: list[MemoryItem] = []
         for raw, memory_id in zip(items, ids, strict=True):
@@ -214,6 +243,19 @@ class QortiaMemoryBackend:
             "memories_written": int(data.get("memories_written", 0)),
             "reflection_counter": int(data.get("reflection_counter", 0)),
         }
+
+    def outcome(self, result: str) -> bool:
+        """Report how this backend instance's unit of work turned out.
+        Qortia decays confidence_multiplier on every private memory this
+        work order's recall() calls touched (ADR-125 Phase 2) — SUCCESS
+        nudges it up, MINOR_FAILURE/CRITICAL_FAILURE down. `result` isn't
+        validated client-side (see agnova.memory.OUTCOME_VALUES for the
+        three values Qortia accepts) — Qortia is authoritative and 422s
+        anything else, surfaced as a QortiaError."""
+        self._request(
+            "POST", "/v1/outcome", {"work_order_id": self._work_order_id, "outcome": result}
+        )
+        return True
 
 
 def _render_entry(entry: dict[str, Any]) -> str:

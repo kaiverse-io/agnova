@@ -37,20 +37,33 @@ class _FakeQortiaStore:
 
     def __init__(self) -> None:
         self.memories: dict[str, dict[str, Any]] = {}
+        self.outcomes: list[dict[str, Any]] = []
 
-    def handle(self, method: str, endpoint: str, payload: dict[str, Any] | None) -> dict[str, Any]:
+    def handle(
+        self,
+        method: str,
+        endpoint: str,
+        payload: dict[str, Any] | None,
+        *,
+        extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         path = endpoint.split("?", 1)[0]  # context() may append ?budget=N
         if path == "/v1/remember" and method == "POST":
-            return self._remember(payload or {})
+            return self._remember(payload or {}, extra_headers)
         if path == "/v1/recall" and method == "POST":
-            return self._recall(payload or {})
+            return self._recall(payload or {}, extra_headers)
         if path == "/v1/forget" and method == "POST":
             return self._forget(payload or {})
         if path == "/v1/context" and method == "GET":
             return self._context()
+        if path == "/v1/outcome" and method == "POST":
+            return self._outcome(payload or {})
         raise AssertionError(f"fake Qortia store has no handler for {method} {endpoint}")
 
-    def _remember(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _remember(
+        self, payload: dict[str, Any], extra_headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        del extra_headers  # available for a future test asserting it's sent
         ids = []
         for mem in payload.get("memories", []):
             mtype = mem.get("type")
@@ -72,7 +85,10 @@ class _FakeQortiaStore:
             ids.append(mid)
         return {"ids": ids}
 
-    def _recall(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _recall(
+        self, payload: dict[str, Any], extra_headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        del extra_headers  # available for a future test asserting it's sent
         needle = str(payload.get("query", "")).lower()
         results = [
             {
@@ -95,6 +111,10 @@ class _FakeQortiaStore:
             raise QortiaNotFoundError(f"qortia: POST /v1/forget — HTTP 404: {mid} not found")
         del self.memories[mid]
         return {"id": mid}
+
+    def _outcome(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.outcomes.append(payload)
+        return {"work_order_id": payload.get("work_order_id"), "outcome": payload.get("outcome")}
 
     def _context(self) -> dict[str, Any]:
         lessons = [
@@ -169,6 +189,15 @@ def test_forget_removes_a_stored_memory(backend: MemoryBackend) -> None:
 
     assert ok is True
     assert not any(marker in h.content for h in backend.recall(marker))
+
+
+def test_outcome_is_reported_or_a_documented_no_op(backend: MemoryBackend) -> None:
+    """qortia records an outcome (True); git has no confidence model to
+    decay and says so (False) rather than crashing — every backend must
+    implement the method, per the Protocol, even when it has nothing to do."""
+    result = backend.outcome("SUCCESS")
+
+    assert isinstance(result, bool)
 
 
 def test_context_honours_a_budget(backend: MemoryBackend) -> None:
