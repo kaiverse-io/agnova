@@ -20,6 +20,12 @@ repos:
       - id: mypy
         args: [--ignore-missing-imports]
         additional_dependencies: []
+        # Scoped to match `just ci-lint`'s own `mypy src/` exactly. Without this,
+        # the hook runs in pre-commit's isolated env (no pytest stub visible via
+        # additional_dependencies: []), so anything in tests/ using a pytest
+        # decorator like @pytest.mark.xfail reads as "untyped decorator" even
+        # though `uv run mypy` in the project's own venv resolves it cleanly.
+        files: ^src/
 
   # Shell scripts
   - repo: https://github.com/shellcheck-py/shellcheck-py
