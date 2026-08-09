@@ -68,16 +68,17 @@ def _config(home: Path, **overrides: Any) -> AgentConfig:
 
 # ── F1 · the memory tool surface is never registered ────────────────────────
 #
-# Verified live, not just by reading source: a provisioned aither agent's
-# container env has no BUZZ_ACP_MCP_COMMAND (docker inspect on a real
-# `aither-agent:local` launch). aither's runtime/agent_overlay.py also writes
-# a `.mcp.json` — but `.mcp.json` is a Claude Code CLI convention, and the
-# harness here is buzz-acp -> the `@agentclientprotocol/claude-agent-acp`
-# ACP adapter, which sources MCP servers exclusively from `params.mcpServers`
-# in the ACP `session/new` request (confirmed by grepping the adapter's
-# compiled dist/ for `.mcp.json` — zero matches; mcpServers is read only from
-# ACP session params, built by buzz-acp from --mcp-command/BUZZ_ACP_MCP_COMMAND).
-# `.mcp.json` is dead code in this pipeline.
+# Verified live, not just by reading source: a real container launch of this
+# harness (docker inspect on a running agent image built from this repo) has
+# no BUZZ_ACP_MCP_COMMAND in its environment. A launcher that writes a
+# `.mcp.json` into the agent home does not help either — `.mcp.json` is a
+# Claude Code CLI convention, and the harness here is buzz-acp ->
+# `@agentclientprotocol/claude-agent-acp`, which sources MCP servers
+# exclusively from `params.mcpServers` on the ACP `session/new` request
+# (confirmed by grepping the adapter's compiled dist/ for `.mcp.json` — zero
+# matches; mcpServers is read only from ACP session params, built by
+# buzz-acp from --mcp-command/BUZZ_ACP_MCP_COMMAND). Any `.mcp.json` a
+# launcher writes is dead code in this pipeline.
 
 
 @pytest.mark.xfail(strict=True, reason="BUZZ_ACP_MCP_COMMAND is never set by harness_env()")
