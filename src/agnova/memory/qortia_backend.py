@@ -205,6 +205,16 @@ class QortiaMemoryBackend:
             return False
         return True
 
+    def reflect(self) -> dict[str, int]:
+        """Trigger consolidation now — POST /v1/reflect is a normal agent-
+        authed endpoint (not gated behind the idle-reflect background
+        worker), so the agent can ask for it directly instead of waiting."""
+        data = self._request("POST", "/v1/reflect", {})
+        return {
+            "memories_written": int(data.get("memories_written", 0)),
+            "reflection_counter": int(data.get("reflection_counter", 0)),
+        }
+
 
 def _render_entry(entry: dict[str, Any]) -> str:
     title = entry.get("title")

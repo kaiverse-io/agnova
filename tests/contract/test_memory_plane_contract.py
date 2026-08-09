@@ -312,14 +312,17 @@ def test_recall_ranks_results(tmp_path: Path) -> None:
 # ── F5 · consolidation is not reachable from the agent ──────────────────────
 
 
-@pytest.mark.xfail(strict=True, reason="the MCP tool list has no reflect entry")
 def test_mcp_exposes_a_reflect_tool() -> None:
     """Consolidation must be reachable from the agent, not only from a worker cron.
 
     Qortia's POST /v1/reflect is a normal agent-authed endpoint (confirmed by
     reading qortia/src/qortia/reflect.py — it takes only `AgentIdentity`), so
-    this is a pure agnova-side gap, not an operational dependency on someone
+    this was a pure agnova-side gap, not an operational dependency on someone
     separately running `qortia-worker --only idle-reflect`.
+
+    Fixed: `reflect` is now on TOOLS, backed by MemoryBackend.reflect() —
+    QortiaMemoryBackend calls POST /v1/reflect; GitMemoryBackend is a
+    documented no-op (no automated consolidation exists on that backend).
     """
     assert "reflect" in {t["name"] for t in TOOLS}, (
         "no reflect tool on the MCP surface — consolidation can only be triggered "
@@ -330,12 +333,12 @@ def test_mcp_exposes_a_reflect_tool() -> None:
 # ── Progressive disclosure · the scaffold ships no Tier-1 index ─────────────
 
 
-@pytest.mark.xfail(strict=True, reason="scaffold writes skills/.gitkeep and nothing else")
 def test_scaffold_writes_a_discoverable_skill_index(tmp_path: Path) -> None:
     """A new agent needs names+descriptions always in context, bodies on match.
 
-    agnova dogfoods this on itself (.agents/skills/<name>/SKILL.md) but the
-    agent it scaffolds gets an empty skills/.gitkeep.
+    Fixed: scaffold now ports agnova's own dogfooded convention
+    (.agents/skills/<name>/SKILL.md) onto the agent it scaffolds — a starter
+    skills/example/SKILL.md plus skills/INDEX.md.
     """
     init("scout", tmp_path, owner="abc", relay="wss://relay.example")
 
@@ -348,9 +351,11 @@ def test_scaffold_writes_a_discoverable_skill_index(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.xfail(strict=True, reason="knowledge/ ships a README but no per-entry index")
 def test_scaffold_writes_a_knowledge_index(tmp_path: Path) -> None:
-    """knowledge/ accumulates by design; without an index it must be read whole or grepped."""
+    """knowledge/ accumulates by design; without an index it must be read whole or grepped.
+
+    Fixed: scaffold now writes knowledge/INDEX.md alongside knowledge/README.md.
+    """
     init("scout", tmp_path, owner="abc", relay="wss://relay.example")
 
     assert (tmp_path / "knowledge" / "INDEX.md").is_file(), (

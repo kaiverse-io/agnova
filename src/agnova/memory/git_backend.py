@@ -169,3 +169,12 @@ class GitMemoryBackend:
                     daily.write_text("".join(kept), encoding="utf-8")
 
         return found
+
+    def reflect(self) -> dict[str, int]:
+        """No automated consolidation on this backend — promoting a daily
+        log entry into MEMORY.md is still the agent's own judgment call,
+        per AGENTS.md's "promoted from memory/ once something proves
+        durable." Present on the Protocol (and the reflect MCP tool) so a
+        naive caller doesn't crash switching backends; it just has nothing
+        to report."""
+        return {"memories_written": 0, "reflection_counter": 0}

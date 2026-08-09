@@ -96,6 +96,17 @@ TOOLS = [
             "properties": {"id": {"type": "string"}},
         },
     },
+    {
+        "name": "reflect",
+        "description": (
+            "Trigger memory consolidation now, instead of waiting for the idle-reflect "
+            "background worker. On the qortia backend this supersedes raw episodic/"
+            "experiential memories into mental models and lessons. On the git backend "
+            "this is a no-op — there is no automated consolidation there; promoting a "
+            "daily log entry into MEMORY.md is still your own judgment call."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -139,6 +150,8 @@ def _call_tool(backend: MemoryBackend, name: str, arguments: dict[str, Any]) -> 
     if name == "forget":
         ok = backend.forget(str(arguments.get("id", "")))
         return _result_text({"forgotten": ok})
+    if name == "reflect":
+        return _result_text(backend.reflect())
     raise ValueError(f"unknown tool: {name}")
 
 

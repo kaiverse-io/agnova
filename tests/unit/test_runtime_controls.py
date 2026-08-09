@@ -479,7 +479,9 @@ def test_scaffold_init_writes_agent_repository_and_preserves_existing_files(
     assert f"BUZZ_OWNER_PUBKEY={OWNER_PUBKEY}" in env
     assert "AGENT_ENGRAM_PATHS=SOUL.md,PRINCIPLES.md" in env
     assert (tmp_path / "memory").is_dir()
-    assert (tmp_path / "skills/.gitkeep").is_file()
+    assert (tmp_path / "skills/INDEX.md").is_file()
+    assert (tmp_path / "skills/example/SKILL.md").is_file()
+    assert (tmp_path / "knowledge/INDEX.md").is_file()
     assert "Scout scaffolded" in capsys.readouterr().out
 
     (tmp_path / "SOUL.md").write_text("custom\n", encoding="utf-8")
