@@ -39,13 +39,14 @@ class _FakeQortiaStore:
         self.memories: dict[str, dict[str, Any]] = {}
 
     def handle(self, method: str, endpoint: str, payload: dict[str, Any] | None) -> dict[str, Any]:
-        if endpoint == "/v1/remember" and method == "POST":
+        path = endpoint.split("?", 1)[0]  # context() may append ?budget=N
+        if path == "/v1/remember" and method == "POST":
             return self._remember(payload or {})
-        if endpoint == "/v1/recall" and method == "POST":
+        if path == "/v1/recall" and method == "POST":
             return self._recall(payload or {})
-        if endpoint == "/v1/forget" and method == "POST":
+        if path == "/v1/forget" and method == "POST":
             return self._forget(payload or {})
-        if endpoint == "/v1/context" and method == "GET":
+        if path == "/v1/context" and method == "GET":
             return self._context()
         raise AssertionError(f"fake Qortia store has no handler for {method} {endpoint}")
 

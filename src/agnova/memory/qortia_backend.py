@@ -17,7 +17,7 @@ from __future__ import annotations
 import http.client
 import json
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from agnova.memory import MemoryItem
 
@@ -135,22 +135,20 @@ class QortiaMemoryBackend:
     # ── MemoryBackend protocol ──────────────────────────────────────────────
 
     def context(self, budget: int | None = None) -> str:
-        data = self._request("GET", "/v1/context", None)
-        parts: list[str] = []
-        for key in ("org_chart", "processes", "handoffs"):
-            for entry in data.get(key) or []:
-                parts.append(_render_entry(entry))
-        weekly = data.get("weekly_summary")
-        if weekly:
-            parts.append(_render_entry(weekly))
-        memories = data.get("memories") or {}
-        for key in ("decisions", "mental_models", "lessons"):
-            for entry in memories.get(key) or []:
-                parts.append(_render_entry(entry))
-        text = "\n\n".join(part for part in parts if part).strip()
-        if budget is not None and budget > 0 and len(text) > budget:
-            return text[:budget]
-        return text
+        endpoint = "/v1/context"
+        if budget is not None and budget > 0:
+            # Passed through so /v1/context's own server-side truncation
+            # (importance-ordered, whole-record) can trim the memories.*
+            # buckets before they ever cross the wire — this client-side
+            # pass is then a second, defensive application of the same
+            # policy over the *whole* rendered bundle, since org_chart/
+            # processes/handoffs aren't server-budgeted at all.
+            endpoint = f"{endpoint}?{urlencode({'budget': budget})}"
+        data = self._request("GET", endpoint, None)
+        ranked = _ranked_context_entries(data)
+        if budget is None or budget <= 0:
+            return "\n\n".join(rendered for _, rendered in ranked).strip()
+        return _fill_budget(ranked, budget)
 
     def recall(self, query: str, filters: dict[str, Any] | None = None) -> list[MemoryItem]:
         if not query.strip():
@@ -212,6 +210,81 @@ def _render_entry(entry: dict[str, Any]) -> str:
     title = entry.get("title")
     content = str(entry.get("content", "")).strip()
     return f"## {title}\n{content}" if title else content
+
+
+# Org-level context (org_chart/processes/handoffs/weekly_summary) has no
+# importance score of its own — it isn't in hindsight_memories — but the
+# finding this replaced was exactly that org-chart boilerplate survived a
+# tight budget while 0.95-importance lessons got cut. Giving it a fixed
+# mid-table prior — below every typed memory except episodic/short_term —
+# means it can still be outranked, "operationally useful" without being
+# unconditionally kept ahead of a hard-won lesson.
+_ORG_CONTEXT_IMPORTANCE = 0.5
+
+
+def _ranked_context_entries(data: dict[str, Any]) -> list[tuple[float, str]]:
+    """Flatten a /v1/context response into one importance-ranked pool —
+    not "always keep org content, then fill with memories" — so callers can
+    drop the lowest-importance entries first regardless of which section
+    they came from."""
+    ranked: list[tuple[float, str]] = []
+    for key in ("org_chart", "processes", "handoffs"):
+        for entry in data.get(key) or []:
+            rendered = _render_entry(entry)
+            if rendered:
+                ranked.append((_ORG_CONTEXT_IMPORTANCE, rendered))
+    weekly = data.get("weekly_summary")
+    if weekly:
+        rendered = _render_entry(weekly)
+        if rendered:
+            ranked.append((_ORG_CONTEXT_IMPORTANCE, rendered))
+
+    memories = data.get("memories") or {}
+    for key in ("decisions", "mental_models", "lessons"):
+        for entry in memories.get(key) or []:
+            rendered = _render_entry(entry)
+            if not rendered:
+                continue
+            importance = entry.get("importance")
+            ranked.append((float(importance) if importance is not None else 0.0, rendered))
+
+    # Stable sort: entries already arrived importance-ordered within their
+    # own bucket, so ties keep that relative order rather than bucket order.
+    ranked.sort(key=lambda pair: pair[0], reverse=True)
+    return ranked
+
+
+def _fill_budget(ranked: list[tuple[float, str]], budget: int) -> str:
+    """Greedily keep the highest-importance entries under a character
+    budget, dropping whole entries rather than slicing any of them — a
+    half-record is a hallucination risk. Unlike /v1/context's own
+    array-membership guarantee (which always keeps at least one entry),
+    this returns a token/char-budgeted string, so it must never exceed
+    budget even to avoid returning nothing."""
+    parts: list[str] = []
+    used = 0
+    omitted = 0
+    for _, rendered in ranked:
+        cost = len(rendered) + (2 if parts else 0)  # "\n\n" join
+        if used + cost > budget:
+            omitted += 1
+            continue
+        parts.append(rendered)
+        used += cost
+
+    text = "\n\n".join(parts).strip()
+    if not omitted:
+        return text
+
+    plural = "y" if omitted == 1 else "ies"
+    marker = f"[... {omitted} lower-importance entr{plural} omitted to fit budget ...]"
+    candidate = f"{text}\n\n{marker}" if text else marker
+    # The marker itself must respect budget too — "never exceed" outranks
+    # "always explain," so an extremely tight budget can legitimately come
+    # back empty rather than over budget.
+    if used + len(marker) + (2 if text else 0) <= budget:
+        return candidate
+    return text
 
 
 def _error_detail(raw: bytes) -> str:

@@ -12,6 +12,45 @@ from agnova.memory import DEFAULT_MEMORY_TYPE, MemoryItem
 
 _ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
+_SNIPPET_WINDOW = 120  # chars of context kept on each side of a match
+_SNIPPET_MAX_MATCHES = (
+    3  # windows joined per file, beyond which "… N more matches" replaces the rest
+)
+_RECALL_MAX_HITS = 20
+_RECALL_MAX_TOTAL_CHARS = 4000  # hard cap across all returned snippets combined
+
+
+def _snippet(text: str, needle: str, *, window: int = _SNIPPET_WINDOW) -> tuple[str, int]:
+    """Windows of context around each match, joined — never the whole file.
+
+    Returns (snippet_text, match_count). Matching is case-insensitive; the
+    windows are cut from the original (not lower-cased) text so casing in
+    the returned snippet matches the source.
+    """
+    lower = text.lower()
+    positions = []
+    start = 0
+    while True:
+        idx = lower.find(needle, start)
+        if idx == -1:
+            break
+        positions.append(idx)
+        start = idx + len(needle)
+    if not positions:
+        return "", 0
+
+    windows: list[str] = []
+    for idx in positions[:_SNIPPET_MAX_MATCHES]:
+        lo = max(0, idx - window)
+        hi = min(len(text), idx + len(needle) + window)
+        piece = text[lo:hi].strip()
+        windows.append(f"…{piece}…" if lo > 0 or hi < len(text) else piece)
+    remaining = len(positions) - len(windows)
+    joined = "\n[...]\n".join(windows)
+    if remaining > 0:
+        joined += f"\n[... {remaining} more match{'es' if remaining != 1 else ''} in this file ...]"
+    return joined, len(positions)
+
 
 class GitMemoryBackend:
     def __init__(self, home: Path) -> None:
@@ -39,29 +78,47 @@ class GitMemoryBackend:
         return text
 
     def recall(self, query: str, filters: dict[str, Any] | None = None) -> list[MemoryItem]:
+        """Snippet windows around each match, ranked by match count then
+        recency — never a whole file. The old behaviour returned
+        `content=text.strip()` on any hit, so recall against a mature
+        MEMORY.md returned all of MEMORY.md: a retrieval step that could
+        cost more context than skipping retrieval entirely."""
         del filters  # reserved for qortia backend
         needle = query.lower().strip()
         if not needle:
             return []
-        hits: list[MemoryItem] = []
         paths: list[Path] = []
         if self.memory_md.is_file():
             paths.append(self.memory_md)
         if self.memory_dir.is_dir():
-            paths.extend(sorted(self.memory_dir.glob("*.md")))
+            paths.extend(self.memory_dir.glob("*.md"))
             if self.entries_dir.is_dir():
-                paths.extend(sorted(self.entries_dir.glob("*.md")))
+                paths.extend(self.entries_dir.glob("*.md"))
+
+        scored: list[tuple[int, float, str, str]] = []  # (match_count, mtime, id, snippet)
         for path in paths:
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
+                mtime = path.stat().st_mtime
             except OSError:
                 continue
-            if needle not in text.lower():
+            snippet, count = _snippet(text, needle)
+            if count == 0:
                 continue
             mid = path.stem if path.parent == self.entries_dir else f"file:{path.name}"
-            hits.append(MemoryItem(id=mid, content=text.strip(), type=DEFAULT_MEMORY_TYPE))
-            if len(hits) >= 20:
+            scored.append((count, mtime, mid, snippet))
+
+        # Most matches first; among ties, most recently modified first —
+        # recency as a proxy for relevance when match count doesn't decide.
+        scored.sort(key=lambda row: (row[0], row[1]), reverse=True)
+
+        hits: list[MemoryItem] = []
+        total_chars = 0
+        for _count, _mtime, mid, snippet in scored[:_RECALL_MAX_HITS]:
+            if total_chars >= _RECALL_MAX_TOTAL_CHARS:
                 break
+            hits.append(MemoryItem(id=mid, content=snippet, type=DEFAULT_MEMORY_TYPE))
+            total_chars += len(snippet)
         return hits
 
     def remember(self, items: list[dict[str, Any]]) -> list[MemoryItem]:

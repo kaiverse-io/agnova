@@ -128,6 +128,10 @@ def test_context_renders_and_sends_auth_headers(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_context_truncates_to_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A single entry that can't fit under budget is dropped whole, not
+    sliced — text[:budget] used to return "a"*10, a mid-content fragment
+    with no indication anything was cut. budget=10 is also too small to fit
+    the drop-marker itself, so the correct result is "", not a fragment."""
     _install(
         monkeypatch,
         200,
@@ -141,7 +145,37 @@ def test_context_truncates_to_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     backend = _backend()
 
-    assert backend.context(budget=10) == "a" * 10
+    assert backend.context(budget=10) == ""
+
+
+def test_context_drops_whole_entries_and_marks_what_was_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install(
+        monkeypatch,
+        200,
+        {
+            "org_chart": [],
+            "processes": [],
+            "handoffs": [],
+            "weekly_summary": None,
+            "memories": {
+                "mental_models": [],
+                "decisions": [],
+                "lessons": [
+                    {"content": "short important lesson", "importance": 0.95},
+                    {"content": "b" * 500, "importance": 0.9},
+                ],
+            },
+        },
+    )
+    backend = _backend()
+
+    out = backend.context(budget=200)
+
+    assert "short important lesson" in out
+    assert "b" * 500 not in out
+    assert "1 lower-importance entry omitted" in out
 
 
 def test_context_empty_response_is_empty_string(monkeypatch: pytest.MonkeyPatch) -> None:

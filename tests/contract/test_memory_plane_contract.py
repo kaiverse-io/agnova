@@ -194,7 +194,13 @@ def test_mcp_schema_documents_qortias_write_constraints() -> None:
 
 
 def _bundle() -> dict[str, Any]:
-    """A context bundle where every section is bigger than a small budget."""
+    """A context bundle where every section is bigger than a small budget.
+
+    memories.* entries carry `importance`, matching what a P2-fixed
+    /v1/context actually returns for every type including decisions
+    (previously decisions shipped without importance at all — see
+    qortia/tests/contract's own test_every_context_entry_carries_importance).
+    """
     filler = "x " * 400
     return {
         "org_chart": [{"title": "Org", "content": f"org chart {filler}"}],
@@ -202,27 +208,36 @@ def _bundle() -> dict[str, Any]:
         "handoffs": [{"title": "Handoff", "content": f"handoff {filler}"}],
         "weekly_summary": {"title": "Week", "content": f"weekly {filler}"},
         "memories": {
-            "decisions": [{"content": f"DECISION-MARKER {filler}"}],
-            "mental_models": [{"content": f"MODEL-MARKER {filler}"}],
-            "lessons": [{"content": f"LESSON-MARKER {filler}"}],
+            "decisions": [
+                {
+                    "content": f"DECISION-MARKER {filler}",
+                    "importance": QORTIA_IMPORTANCE["decision"],
+                }
+            ],
+            "mental_models": [
+                {
+                    "content": f"MODEL-MARKER {filler}",
+                    "importance": QORTIA_IMPORTANCE["mental_model"],
+                }
+            ],
+            "lessons": [
+                {"content": f"LESSON-MARKER {filler}", "importance": QORTIA_IMPORTANCE["lesson"]}
+            ],
         },
     }
 
 
-@pytest.mark.xfail(strict=True, reason="context() truncates in render order, not importance order")
 def test_context_keeps_the_most_important_memories_under_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Under budget pressure, drop 0.3-importance episodics before 0.95 lessons.
 
-    Today the render order is org_chart -> processes -> handoffs -> weekly ->
-    decisions -> mental_models -> lessons, followed by text[:budget]. That is
-    close to the exact inverse of Qortia's own importance priors. It is also,
-    per a live /v1/context read, unfixable client-side as written: decisions
-    are selected without `importance` at all (remember.py's get_context does
-    `MemoryEntry(content=r["content"])` for decisions but
-    `MemoryEntry(content=..., importance=r["importance"])` for mental_models
-    and lessons) — see the qortia-side P2 fix this depends on.
+    Fixed, and depended on the qortia-side P2 fix (decisions now carry
+    importance too): context() now pools org_chart/processes/handoffs/
+    weekly_summary and memories.* into one importance-ranked list —
+    org-level content gets a fixed 0.5 prior (Qortia doesn't score it) so
+    it can still be outranked by a 0.95 lesson under pressure, rather than
+    being kept unconditionally ahead of every typed memory.
     """
     backend = QortiaMemoryBackend("http://qortia.test", "key", "agent-id")
     monkeypatch.setattr(backend, "_request", lambda *a, **k: _bundle())
@@ -235,11 +250,14 @@ def test_context_keeps_the_most_important_memories_under_budget(
     )
 
 
-@pytest.mark.xfail(strict=True, reason="context() byte-slices mid-record with no drop marker")
 def test_context_does_not_cut_a_record_mid_sentence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Dropping whole records beats slicing bytes: a half-record is a hallucination risk."""
+    """Dropping whole records beats slicing bytes: a half-record is a hallucination risk.
+
+    Fixed: context() now drops whole entries and appends an "omitted" marker
+    naming the count, instead of a raw text[:budget] slice.
+    """
     backend = QortiaMemoryBackend("http://qortia.test", "key", "agent-id")
     monkeypatch.setattr(backend, "_request", lambda *a, **k: _bundle())
 
@@ -253,12 +271,11 @@ def test_context_does_not_cut_a_record_mid_sentence(
 # ── F4 · git recall returns whole documents ─────────────────────────────────
 
 
-@pytest.mark.xfail(strict=True, reason="GitMemoryBackend.recall() returns whole matched files")
 def test_recall_returns_snippets_not_whole_documents(tmp_path: Path) -> None:
     """A retrieval step must cost less context than skipping retrieval.
 
-    GitMemoryBackend matches a substring and then returns the entire file —
-    so recall against a mature MEMORY.md returns all of MEMORY.md.
+    Fixed: recall() now returns windows of context around each match
+    (_snippet()), not `content=text.strip()` on the whole file.
     """
     memory_md = tmp_path / "MEMORY.md"
     filler = "\n".join(f"- unrelated note number {i} about routine operations" for i in range(1500))
@@ -274,9 +291,12 @@ def test_recall_returns_snippets_not_whole_documents(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.xfail(strict=True, reason="GitMemoryBackend.recall() has no ranking of any kind")
 def test_recall_ranks_results(tmp_path: Path) -> None:
-    """Recency + match count + section depth beats first-file-wins ordering."""
+    """Recency + match count + section depth beats first-file-wins ordering.
+
+    Fixed: recall() now sorts by (match count, mtime) descending instead of
+    glob order.
+    """
     mem = tmp_path / "memory"
     mem.mkdir()
     (mem / "2026-01-01.md").write_text("frontdoor mentioned once\n")
