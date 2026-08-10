@@ -7,19 +7,36 @@ repos:
 
   # Python linting + formatting (Astral)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    # Kept in sync with the ruff version uv.lock actually resolves (see
+    # `just ci-lint`'s `uv run ruff check .`) -- the previous v0.6.9 pin was
+    # a full year stale and flagged findings (e.g. S603 on subprocess.run
+    # calls already justified with a # noqa-equivalent comment) that the
+    # project's real, tested ruff version does not.
+    rev: v0.16.1
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
 
-  # Type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+  # Type checking — local hook, not mirrors-mypy: that hook's isolated venv
+  # (additional_dependencies: []) has none of this project's dependencies
+  # installed, so anything touching coincurve (nostr.py, mint_auth_tag.py,
+  # selftest.py) degrades to `Any` and false-positives on
+  # --warn-return-any-style checks, and anything in tests/ using a pytest
+  # decorator like @pytest.mark.xfail reads as "untyped decorator" — both
+  # cascade into spurious errors mypy in this project's own venv does not
+  # produce. Shelling into the project's own uv-managed venv is both correct
+  # and guarantees this can never again disagree with `just ci-lint`'s own
+  # `uv run mypy src/` (same pattern already used for import-linter/opengrep
+  # below, and for aither's equivalent hook).
+  - repo: local
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports]
-        additional_dependencies: []
+        name: mypy
+        entry: uv run mypy src/
+        language: system
+        types: [python]
+        pass_filenames: false
 
   # Shell scripts
   - repo: https://github.com/shellcheck-py/shellcheck-py

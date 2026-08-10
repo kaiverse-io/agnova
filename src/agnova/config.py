@@ -180,6 +180,19 @@ class AgentConfig:
         if self.checkpoint_token:
             env["AGENT_CHECKPOINT_TOKEN"] = self.checkpoint_token
         env["AGENT_MEMORY_BACKEND"] = self.memory_backend
+        # buzz-acp v0.5.2's --mcp-command/BUZZ_ACP_MCP_COMMAND is a single
+        # command string, not a list — one MCP server slot, no --mcp-args
+        # companion flag the way --agent-command has --agent-args. Without
+        # this, buzz-acp registers no MCP servers at all and every
+        # context/recall/remember/forget tool behind AGENT_MEMORY_BACKEND is
+        # unreachable, regardless of which backend is selected. buzz-cli
+        # (the agent's *other* would-be tool surface) is deliberately not
+        # built by `agnova install` today (see supervise.py's install()), so
+        # this slot is free; if that changes, this default needs revisiting
+        # rather than silently losing memory tools. setdefault, not a hard
+        # overwrite: an operator's own .env can still claim the slot for
+        # something else.
+        env.setdefault("BUZZ_ACP_MCP_COMMAND", "agnova-memory")
         env.setdefault("BUZZ_AGENT_HOME", str(self.home))
         return env
 

@@ -173,6 +173,10 @@ to it.
    difference between organising well and organising to your own taste.
 4. Read `USER.md` — who you serve.
 5. Read `MEMORY.md`, then today's and yesterday's `memory/` entries.
+6. Read `skills/INDEX.md` and `knowledge/INDEX.md` — names and one-line
+   descriptions only. Fetch a skill's `SKILL.md` or a knowledge entry's body
+   only once its description matches the task in front of you; reading
+   every body up front defeats the point of the index.
 
 ## The pipeline
 
@@ -212,9 +216,9 @@ is yours; the runtime only persists what you wrote.
 | Who you serve | `USER.md` |
 | Long-term memory | `MEMORY.md` |
 | A given day | `memory/YYYY-MM-DD.md` |
-| Structured knowledge | `knowledge/` |
+| Structured knowledge | `knowledge/` (`knowledge/INDEX.md` first) |
 | Organised ideas | `ideas/` |
-| Capabilities | `skills/` |
+| Capabilities | `skills/` (`skills/INDEX.md` first) |
 
 ## What does not belong here
 
@@ -359,7 +363,18 @@ Every entry carries its provenance. Knowledge whose source is unknown cannot be
 trusted later, and an agent that cannot say why it believes something is guessing
 with extra steps.
 
-This is the library. The diary is `memory/`.
+This is the library. The diary is `memory/`. New entries go in `INDEX.md` too —
+one line each, so the whole catalogue can be scanned without opening a file.
+""",
+    )
+
+    w(
+        "knowledge/INDEX.md",
+        """# Knowledge index
+
+<!-- One line per entry:  - [Title](slug.md) — one-line hook.
+     Read before the entries themselves — names and hooks first, bodies on
+     demand. A routing tree costs more than it returns; keep this flat. -->
 """,
     )
 
@@ -378,7 +393,47 @@ usually means either the idea is wrong or a principle has changed.
 """,
     )
 
-    w("skills/.gitkeep", "")
+    w(
+        "skills/INDEX.md",
+        """# Skill index
+
+<!-- One line per skill:  - [Name](name/SKILL.md) — one-line, skippable description.
+     Read this before any SKILL.md body — names and descriptions always in
+     context, bodies loaded only when a description matches the task. -->
+
+- [example](example/SKILL.md) — starter skill; replace or delete it.
+""",
+    )
+
+    w(
+        "skills/example/SKILL.md",
+        f"""# Example Skill
+
+> This is a starter skill for {name.capitalize()} — replace or delete it, and
+> update `skills/INDEX.md` to match.
+> Skills are reusable agent capabilities. Standard: https://agentskills.io
+
+## What this skill does
+
+Describe what the skill accomplishes in 1-2 sentences. This line, plus the
+INDEX.md entry, is what gets read every session — write it to be skippable
+by a task this skill has nothing to do with.
+
+## Steps
+
+1. Step one — describe what the agent should do.
+2. Step two — be specific about commands, file paths, expected output.
+3. Verify — describe what success looks like.
+
+## When to use
+
+- Situation A where this skill is appropriate.
+
+## When NOT to use
+
+- Situation where a different approach is better.
+""",
+    )
 
     w(
         ".gitignore",

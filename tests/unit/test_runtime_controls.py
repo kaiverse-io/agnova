@@ -128,6 +128,16 @@ def test_load_merges_file_and_environment_with_host_precedence(
     assert env["BUZZ_AUTH_TAG"] == '["auth"]'
     assert env["AGENT_CHECKPOINT_TOKEN"] == "env-token"
     assert env["AGENT_MEMORY_BACKEND"] == "git"
+    assert env["BUZZ_ACP_MCP_COMMAND"] == "agnova-memory"
+
+
+def test_harness_env_lets_the_agents_own_env_claim_the_mcp_slot(tmp_path: Path) -> None:
+    """buzz-acp's --mcp-command is a single slot (no --mcp-args, unlike
+    --agent-command/--agent-args) — an operator who wants something other
+    than agnova-memory there must still be able to have it."""
+    cfg = _cfg(tmp_path, env={"BUZZ_ACP_MCP_COMMAND": "buzz-cli"})
+
+    assert cfg.harness_env()["BUZZ_ACP_MCP_COMMAND"] == "buzz-cli"
 
 
 def test_load_reports_actionable_errors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -469,7 +479,9 @@ def test_scaffold_init_writes_agent_repository_and_preserves_existing_files(
     assert f"BUZZ_OWNER_PUBKEY={OWNER_PUBKEY}" in env
     assert "AGENT_ENGRAM_PATHS=SOUL.md,PRINCIPLES.md" in env
     assert (tmp_path / "memory").is_dir()
-    assert (tmp_path / "skills/.gitkeep").is_file()
+    assert (tmp_path / "skills/INDEX.md").is_file()
+    assert (tmp_path / "skills/example/SKILL.md").is_file()
+    assert (tmp_path / "knowledge/INDEX.md").is_file()
     assert "Scout scaffolded" in capsys.readouterr().out
 
     (tmp_path / "SOUL.md").write_text("custom\n", encoding="utf-8")
@@ -790,6 +802,68 @@ def test_supervise_doctor_status_logs_and_down(
     monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: None)
     assert supervise.down(cfg) == 0
     assert stopped == ["harness", "frontdoor", "checkpoint"]
+
+
+def test_doctor_flags_missing_qortia_env_when_backend_is_qortia(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
+    monkeypatch.setattr(supervise, "ROOT", tmp_path)
+    monkeypatch.delenv("QORTIA_URL", raising=False)
+    monkeypatch.delenv("QORTIA_API_KEY", raising=False)
+    monkeypatch.delenv("QORTIA_AGENT_ID", raising=False)
+    cfg = _cfg(tmp_path, memory_backend="qortia")
+    cfg.var.mkdir(parents=True)
+    monkeypatch.setattr(supervise, "buzz_acp_binary", lambda: "/bin/buzz-acp")
+    monkeypatch.setattr(supervise.shutil, "which", lambda name: "/bin/x")
+    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: None)
+
+    problems = supervise.doctor(cfg)
+
+    out = capsys.readouterr().out
+    assert "QORTIA_URL" in out and "QORTIA_API_KEY" in out and "QORTIA_AGENT_ID" in out
+    assert problems >= 1
+
+
+def test_doctor_warns_on_a_large_memory_md(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
+    monkeypatch.setattr(supervise, "ROOT", tmp_path)
+    cfg = _cfg(tmp_path)  # memory_backend defaults to "git"
+    cfg.var.mkdir(parents=True)
+    (tmp_path / "MEMORY.md").write_text("x" * 60_000, encoding="utf-8")
+    monkeypatch.setattr(supervise, "buzz_acp_binary", lambda: "/bin/buzz-acp")
+    monkeypatch.setattr(supervise.shutil, "which", lambda name: "/bin/x")
+    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: None)
+
+    supervise.doctor(cfg)
+
+    out = capsys.readouterr().out
+    assert "MEMORY.md is 60,000 bytes" in out
+    assert "consider promoting/trimming" in out
+
+
+def test_doctor_reports_the_registered_mcp_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "VAR_DIR", tmp_path / "var")
+    monkeypatch.setattr(supervise, "ROOT", tmp_path)
+    cfg = _cfg(tmp_path)
+    cfg.var.mkdir(parents=True)
+    monkeypatch.setattr(supervise, "buzz_acp_binary", lambda: "/bin/buzz-acp")
+    monkeypatch.setattr(supervise.shutil, "which", lambda name: "/bin/x")
+    monkeypatch.setattr(supervise, "running_pid", lambda cfg, service: None)
+
+    problems_before = supervise.doctor(cfg)
+
+    out = capsys.readouterr().out
+    assert "BUZZ_ACP_MCP_COMMAND='agnova-memory'" in out
+    assert "agnova selftest --memory" in out
+    assert problems_before == 0
 
 
 def test_supervise_up_starts_needed_services_and_reports_failures(

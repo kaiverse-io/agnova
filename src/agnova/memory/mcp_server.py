@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agnova.memory import MemoryBackend
+from agnova.memory import MEMORY_TYPES, OUTCOME_VALUES, MemoryBackend
 from agnova.memory.git_backend import GitMemoryBackend
 from agnova.memory.qortia_backend import QortiaMemoryBackend
 
@@ -41,7 +41,13 @@ TOOLS = [
     },
     {
         "name": "remember",
-        "description": "Persist agent-chosen memories",
+        "description": (
+            "Persist agent-chosen memories. Each item's `content` must be at least "
+            "5 words — shorter content is rejected on the qortia backend. `type` "
+            "defaults to 'episodic' if omitted; only use `short_term` together "
+            "with `ttl_seconds` (required for short_term, rejected for every "
+            "other type)."
+        ),
         "inputSchema": {
             "type": "object",
             "required": ["items"],
@@ -52,9 +58,29 @@ TOOLS = [
                         "type": "object",
                         "required": ["content"],
                         "properties": {
-                            "type": {"type": "string"},
-                            "content": {"type": "string"},
+                            "type": {
+                                "type": "string",
+                                "enum": sorted(MEMORY_TYPES),
+                                "description": (
+                                    "episodic (default) · experiential · mental_model · "
+                                    "decision · lesson · short_term. Roughly ordered by "
+                                    "how much this system weighs the memory later: "
+                                    "lesson and decision outrank episodic and short_term."
+                                ),
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "At least 5 words.",
+                            },
                             "metadata": {"type": "object"},
+                            "ttl_seconds": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": (
+                                    "Required when type is short_term; must be omitted "
+                                    "for every other type."
+                                ),
+                            },
                         },
                     },
                 }
@@ -68,6 +94,34 @@ TOOLS = [
             "type": "object",
             "required": ["id"],
             "properties": {"id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "reflect",
+        "description": (
+            "Trigger memory consolidation now, instead of waiting for the idle-reflect "
+            "background worker. On the qortia backend this supersedes raw episodic/"
+            "experiential memories into mental models and lessons. On the git backend "
+            "this is a no-op — there is no automated consolidation there; promoting a "
+            "daily log entry into MEMORY.md is still your own judgment call."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "outcome",
+        "description": (
+            "Report whether this session's work succeeded — on the qortia backend, "
+            "decays confidence on every memory this session's recall() calls touched "
+            "(SUCCESS nudges it up; MINOR_FAILURE/CRITICAL_FAILURE down). No-op on "
+            "the git backend, which has no confidence model. Call once, when the "
+            "work concludes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["result"],
+            "properties": {
+                "result": {"type": "string", "enum": sorted(OUTCOME_VALUES)},
+            },
         },
     },
 ]
@@ -113,6 +167,11 @@ def _call_tool(backend: MemoryBackend, name: str, arguments: dict[str, Any]) -> 
     if name == "forget":
         ok = backend.forget(str(arguments.get("id", "")))
         return _result_text({"forgotten": ok})
+    if name == "reflect":
+        return _result_text(backend.reflect())
+    if name == "outcome":
+        ok = backend.outcome(str(arguments.get("result", "")))
+        return _result_text({"recorded": ok})
     raise ValueError(f"unknown tool: {name}")
 
 

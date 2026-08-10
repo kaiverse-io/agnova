@@ -8,9 +8,58 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from agnova.memory import MemoryItem
+from agnova.memory import DEFAULT_MEMORY_TYPE, MemoryItem
 
 _ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+_SNIPPET_WINDOW = 120  # chars of context kept on each side of a match
+_SNIPPET_MAX_MATCHES = (
+    3  # windows joined per file, beyond which "… N more matches" replaces the rest
+)
+_RECALL_MAX_HITS = 20
+_RECALL_MAX_TOTAL_CHARS = 4000  # hard cap across all returned snippets combined
+
+
+def _snippet(text: str, terms: list[str], *, window: int = _SNIPPET_WINDOW) -> tuple[str, int]:
+    """Windows of context around each match, joined — never the whole file.
+
+    `terms` are ANDed and word-boundary matched (case-insensitive): every
+    term must appear as a whole word somewhere in the text, or the file
+    doesn't qualify at all — the old behaviour treated the *entire* query as
+    one literal substring (`recall("rate limiting AuthService")` matched
+    only if that exact phrase appeared verbatim, so ordinary multi-word
+    queries returned nothing unless they happened to quote the source
+    exactly), and matched raw substrings with no word boundary (a query for
+    "cat" matched inside "category"), which could let an unrelated file
+    outrank the real answer purely by containing the query as a substring
+    of a longer, unrelated word many times.
+
+    Returns (snippet_text, match_count) — match_count sums occurrences
+    across all terms and is the primary ranking key in recall().
+    """
+    if not terms:
+        return "", 0
+
+    matches: list[tuple[int, int]] = []  # (position, matched length)
+    for term in terms:
+        pattern = re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
+        term_matches = [(m.start(), len(term)) for m in pattern.finditer(text)]
+        if not term_matches:
+            return "", 0  # AND semantics: every term must be present
+        matches.extend(term_matches)
+    matches.sort(key=lambda m: m[0])
+
+    windows: list[str] = []
+    for idx, length in matches[:_SNIPPET_MAX_MATCHES]:
+        lo = max(0, idx - window)
+        hi = min(len(text), idx + length + window)
+        piece = text[lo:hi].strip()
+        windows.append(f"…{piece}…" if lo > 0 or hi < len(text) else piece)
+    remaining = len(matches) - len(windows)
+    joined = "\n[...]\n".join(windows)
+    if remaining > 0:
+        joined += f"\n[... {remaining} more match{'es' if remaining != 1 else ''} in this file ...]"
+    return joined, len(matches)
 
 
 class GitMemoryBackend:
@@ -39,29 +88,60 @@ class GitMemoryBackend:
         return text
 
     def recall(self, query: str, filters: dict[str, Any] | None = None) -> list[MemoryItem]:
+        """Snippet windows around each match, ranked by match count then
+        recency — never a whole file. The old behaviour returned
+        `content=text.strip()` on any hit, so recall against a mature
+        MEMORY.md returned all of MEMORY.md: a retrieval step that could
+        cost more context than skipping retrieval entirely.
+
+        The query is split into words and ANDed, word-boundary matched
+        (see `_snippet`) — not treated as one literal phrase. A query for
+        "rate limiting AuthService" now matches a file mentioning all three
+        words in any order/position, not only a file containing that exact
+        substring verbatim (evals/run_recall_eval.py caught this: every
+        multi-word query in the eval dataset returned zero results under
+        the old whole-phrase-substring behaviour)."""
         del filters  # reserved for qortia backend
-        needle = query.lower().strip()
-        if not needle:
+        terms = re.findall(r"\w+", query.lower())
+        if not terms:
             return []
-        hits: list[MemoryItem] = []
         paths: list[Path] = []
         if self.memory_md.is_file():
             paths.append(self.memory_md)
         if self.memory_dir.is_dir():
-            paths.extend(sorted(self.memory_dir.glob("*.md")))
+            paths.extend(self.memory_dir.glob("*.md"))
             if self.entries_dir.is_dir():
-                paths.extend(sorted(self.entries_dir.glob("*.md")))
+                paths.extend(self.entries_dir.glob("*.md"))
+
+        scored: list[tuple[int, float, str, str]] = []  # (match_count, mtime, id, snippet)
         for path in paths:
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
+                mtime = path.stat().st_mtime
             except OSError:
                 continue
-            if needle not in text.lower():
+            snippet, count = _snippet(text, terms)
+            if count == 0:
                 continue
             mid = path.stem if path.parent == self.entries_dir else f"file:{path.name}"
-            hits.append(MemoryItem(id=mid, content=text.strip(), type="note"))
-            if len(hits) >= 20:
+            scored.append((count, mtime, mid, snippet))
+
+        # Most matches first; among ties, most recently modified first —
+        # recency as a proxy for relevance when match count doesn't decide.
+        scored.sort(key=lambda row: (row[0], row[1]), reverse=True)
+
+        # Checked *before* adding, not after: checking post-hoc lets the one
+        # snippet that crosses the line still get included in full, so the
+        # combined total can exceed the "hard cap" the constant promises
+        # (evals/run_recall_eval.py's geh-010 caught this: 4022 chars back
+        # when the check ran after appending).
+        hits: list[MemoryItem] = []
+        total_chars = 0
+        for _count, _mtime, mid, snippet in scored[:_RECALL_MAX_HITS]:
+            if total_chars + len(snippet) > _RECALL_MAX_TOTAL_CHARS:
                 break
+            hits.append(MemoryItem(id=mid, content=snippet, type=DEFAULT_MEMORY_TYPE))
+            total_chars += len(snippet)
         return hits
 
     def remember(self, items: list[dict[str, Any]]) -> list[MemoryItem]:
@@ -75,7 +155,7 @@ class GitMemoryBackend:
             if not content:
                 continue
             mid = self._safe_id(str(raw.get("id") or uuid.uuid4().hex[:12]))
-            mtype = str(raw.get("type") or "note")
+            mtype = str(raw.get("type") or DEFAULT_MEMORY_TYPE)
             raw_meta = raw.get("metadata")
             meta: dict[str, Any] = dict(raw_meta) if isinstance(raw_meta, dict) else {}
             body = f"---\nid: {mid}\ntype: {mtype}\n---\n\n{content}\n"
@@ -88,9 +168,44 @@ class GitMemoryBackend:
         return stored
 
     def forget(self, memory_id: str) -> bool:
+        """Remove the entry file *and* its pointer line from whichever daily
+        log remember() wrote it into — recall() searches both, so leaving
+        the pointer behind makes a forgotten memory still recallable via
+        its daily-log copy of the content."""
         mid = self._safe_id(memory_id)
         path = self.entries_dir / f"{mid}.md"
-        if not path.is_file():
-            return False
-        path.unlink()
-        return True
+        found = path.is_file()
+        if found:
+            path.unlink()
+
+        if self.memory_dir.is_dir():
+            marker = f"- [{mid}] "
+            for daily in self.memory_dir.glob("*.md"):
+                try:
+                    text = daily.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                lines = text.splitlines(keepends=True)
+                kept = [ln for ln in lines if not ln.startswith(marker)]
+                if len(kept) != len(lines):
+                    found = True
+                    daily.write_text("".join(kept), encoding="utf-8")
+
+        return found
+
+    def reflect(self) -> dict[str, int]:
+        """No automated consolidation on this backend — promoting a daily
+        log entry into MEMORY.md is still the agent's own judgment call,
+        per AGENTS.md's "promoted from memory/ once something proves
+        durable." Present on the Protocol (and the reflect MCP tool) so a
+        naive caller doesn't crash switching backends; it just has nothing
+        to report."""
+        return {"memories_written": 0, "reflection_counter": 0}
+
+    def outcome(self, result: str) -> bool:
+        """No confidence model to decay on this backend — files don't carry
+        a confidence_multiplier the way Qortia's memories do. Present on the
+        Protocol (and the outcome MCP tool) so a naive caller doesn't crash
+        switching backends; it just has nothing to record."""
+        del result
+        return False

@@ -1,0 +1,238 @@
+{
+  "version": "1",
+  "cases": [
+    {
+      "id": "geh-001",
+      "description": "distinctive term \u2014 ground truth has it, hard negative doesn't",
+      "setup": {
+        "memories": [
+          {
+            "content": "Fixed the rate limiting bug in AuthService by switching the token bucket algorithm to use Redis instead of an in-process counter."
+          }
+        ],
+        "hard_negatives": [
+          {
+            "content": "Reviewed PR 142 for the payment gateway and found a SQL injection risk in the order query builder."
+          }
+        ]
+      },
+      "ground_truth_index": 0,
+      "query": "rate limiting AuthService",
+      "expected": {
+        "must_contain_in_top_result": [
+          "AuthService"
+        ],
+        "min_results": 1,
+        "ground_truth_in_top_5": true
+      }
+    },
+    {
+      "id": "geh-002",
+      "description": "adversarial: hard negative repeats the query term more often than ground truth (documents a known match-count-only ranking limitation, not a bug \u2014 see run_recall_eval.py docstring)",
+      "setup": {
+        "memories": [
+          {
+            "content": "Decided to remove Redis from the stack entirely. All session state moves to Postgres going forward."
+          }
+        ],
+        "hard_negatives": [
+          {
+            "content": "Redis Redis Redis \u2014 spent the afternoon tuning Redis eviction policy, Redis maxmemory, and Redis persistence settings. Redis is now configured for AOF."
+          }
+        ]
+      },
+      "ground_truth_index": 0,
+      "query": "Redis",
+      "expected": {
+        "min_results": 1
+      }
+    },
+    {
+      "id": "geh-003",
+      "description": "multi-file disambiguation among three candidates",
+      "setup": {
+        "memories": [
+          {
+            "content": "Chose Terraform over Pulumi for infrastructure as code because the team already knows HCL."
+          }
+        ],
+        "hard_negatives": [
+          {
+            "content": "Chose PostgreSQL over MongoDB for the primary datastore because we need transactions."
+          },
+          {
+            "content": "Chose pytest over unittest for the test suite because of better fixture support."
+          }
+        ]
+      },
+      "ground_truth_index": 0,
+      "query": "infrastructure as code Terraform Pulumi",
+      "expected": {
+        "must_contain_in_top_result": [
+          "Terraform"
+        ],
+        "min_results": 1,
+        "ground_truth_in_top_5": true
+      }
+    },
+    {
+      "id": "geh-004",
+      "description": "mtime tie-break: equal match count, more recently written wins",
+      "setup": {
+        "memories": [
+          {
+            "content": "The deploy pipeline now runs canary checks before promoting to production.",
+            "mtime_offset_seconds": 0
+          }
+        ],
+        "hard_negatives": [
+          {
+            "content": "An earlier draft mentioned canary checks but the design changed since.",
+            "mtime_offset_seconds": -3600
+          }
+        ]
+      },
+      "ground_truth_index": 0,
+      "query": "canary checks",
+      "expected": {
+        "must_contain_in_top_result": [
+          "production"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "id": "geh-005",
+      "description": "snippet correctness on a long entry \u2014 must return a bounded window, not the whole file",
+      "setup": {
+        "memories": [
+          {
+            "content": "PADDING_START. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. THE_MARKER_TERM appears exactly once, buried in the middle of this otherwise long entry so the snippet extraction has to prove it windows around the match instead of returning the entire multi-paragraph document. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. PADDING_END."
+          }
+        ],
+        "hard_negatives": []
+      },
+      "ground_truth_index": 0,
+      "query": "THE_MARKER_TERM",
+      "expected": {
+        "must_contain_in_top_result": [
+          "THE_MARKER_TERM"
+        ],
+        "min_results": 1,
+        "max_content_chars": 400
+      }
+    },
+    {
+      "id": "geh-006",
+      "description": "no match anywhere \u2014 recall must return empty, not a false hit",
+      "setup": {
+        "memories": [
+          {
+            "content": "Set up the staging environment with a dedicated Postgres replica."
+          }
+        ],
+        "hard_negatives": []
+      },
+      "ground_truth_index": null,
+      "query": "quantum entanglement kubernetes",
+      "expected": {
+        "min_results": 0,
+        "max_results": 0
+      }
+    },
+    {
+      "id": "geh-007",
+      "description": "content promoted to MEMORY.md must still rank on merit, not just because it's in MEMORY.md",
+      "setup": {
+        "memories": [
+          {
+            "content": "Team convention: all new services expose a /health endpoint returning 200 with a JSON body.",
+            "in_memory_md": true
+          }
+        ],
+        "hard_negatives": [
+          {
+            "content": "Debugged a flaky health endpoint check that intermittently returned 503 under load."
+          }
+        ]
+      },
+      "ground_truth_index": 0,
+      "query": "team convention health endpoint",
+      "expected": {
+        "must_contain_in_top_result": [
+          "convention"
+        ],
+        "min_results": 1,
+        "ground_truth_in_top_5": true
+      }
+    },
+    {
+      "id": "geh-008",
+      "description": "case-insensitive matching",
+      "setup": {
+        "memories": [
+          {
+            "content": "Migrated the CI pipeline from CircleCI to GitHub Actions over the weekend."
+          }
+        ],
+        "hard_negatives": [
+          {
+            "content": "Unrelated: renamed a few internal variables for clarity."
+          }
+        ]
+      },
+      "ground_truth_index": 0,
+      "query": "github actions",
+      "expected": {
+        "must_contain_in_top_result": [
+          "GitHub Actions"
+        ],
+        "min_results": 1
+      }
+    },
+    {
+      "id": "geh-009",
+      "description": "word-boundary: query term must not false-positive-match as a substring of an unrelated word",
+      "setup": {
+        "memories": [
+          {
+            "content": "The cat command was used to inspect the log file for errors during the incident."
+          }
+        ],
+        "hard_negatives": [
+          {
+            "content": "Updated the product category taxonomy: category, categorization, and subcategory fields all now share one enum. Category changes require a migration. Category is indexed."
+          }
+        ]
+      },
+      "ground_truth_index": 0,
+      "query": "cat command log file",
+      "expected": {
+        "must_contain_in_top_result": [
+          "cat command"
+        ],
+        "min_results": 1,
+        "ground_truth_in_top_5": true
+      }
+    },
+    {
+      "id": "geh-010",
+      "description": "recall caps: many matching entries \u2014 result count and total char budget must stay bounded",
+      "setup": {
+        "memories": [
+          {
+            "content": "Sprint retro item 1: velocity tracking needs a dashboard.",
+            "repeat": 30
+          }
+        ],
+        "hard_negatives": []
+      },
+      "ground_truth_index": 0,
+      "query": "velocity tracking",
+      "expected": {
+        "max_result_count": 20,
+        "max_total_chars": 4000
+      }
+    }
+  ]
+}
