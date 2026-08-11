@@ -54,3 +54,9 @@ graphify-out/
 var/
 # Agent configs are committed; their secrets never are.
 *.key
+
+# --- Evals ---
+# Scratch download cache — evals/datasets/ is the git-tracked, offline-reproducible
+# copy of what an eval actually reads (see evals/datasets/README.md). This is only
+# where a fetch lands before being vendored there; never the source an eval reads.
+evals/.cache/

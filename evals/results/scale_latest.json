@@ -1,0 +1,88 @@
+{
+  "dataset": "beir/fiqa-2018",
+  "queries": 100,
+  "runs": [
+    {
+      "size": 50000,
+      "arm": "and-gate-1-terms",
+      "recall_at_5": 0.04,
+      "mrr": 0.025333333333333333,
+      "precision_at_budget": 0.015749837736250553,
+      "chars_returned": 3821.62,
+      "zero_result_rate": 0.0,
+      "ms_per_query": 885.6302454002434
+    },
+    {
+      "size": 50000,
+      "arm": "and-gate-2-terms",
+      "recall_at_5": 0.05,
+      "mrr": 0.029,
+      "precision_at_budget": 0.00981438857362865,
+      "chars_returned": 3383.54,
+      "zero_result_rate": 0.04,
+      "ms_per_query": 887.779994160228
+    },
+    {
+      "size": 50000,
+      "arm": "and-gate-3-terms",
+      "recall_at_5": 0.08,
+      "mrr": 0.05333333333333333,
+      "precision_at_budget": 0.021026163011746368,
+      "chars_returned": 2524.4,
+      "zero_result_rate": 0.23,
+      "ms_per_query": 2108.0126376097905
+    },
+    {
+      "size": 50000,
+      "arm": "and-gate-4-terms",
+      "recall_at_5": 0.04,
+      "mrr": 0.032,
+      "precision_at_budget": 0.01167146086910247,
+      "chars_returned": 1572.63,
+      "zero_result_rate": 0.44,
+      "ms_per_query": 3335.876966109645
+    },
+    {
+      "size": 50000,
+      "arm": "and-gate-6-terms",
+      "recall_at_5": 0.04,
+      "mrr": 0.032,
+      "precision_at_budget": 0.01167146086910247,
+      "chars_returned": 819.21,
+      "zero_result_rate": 0.68,
+      "ms_per_query": 1736.298543700541
+    },
+    {
+      "size": 50000,
+      "arm": "and-gate-full-question",
+      "recall_at_5": 0.0,
+      "mrr": 0.0,
+      "precision_at_budget": 0.0,
+      "chars_returned": 425.12,
+      "zero_result_rate": 0.81,
+      "ms_per_query": 1001.9316550304937
+    },
+    {
+      "size": 50000,
+      "arm": "baseline",
+      "terms": 3,
+      "recall_at_5": 0.08,
+      "mrr": 0.05333333333333333,
+      "precision_at_budget": 0.021026163011746368,
+      "chars_returned": 2524.4,
+      "zero_result_rate": 0.23,
+      "ms_per_query": 873.2885221097968
+    },
+    {
+      "size": 50000,
+      "arm": "bm25",
+      "terms": 3,
+      "recall_at_5": 0.12,
+      "mrr": 0.07433333333333333,
+      "precision_at_budget": 0.028196062719296065,
+      "chars_returned": 2449.29,
+      "zero_result_rate": 0.23,
+      "ms_per_query": 3486.6897965298267
+    }
+  ]
+}
