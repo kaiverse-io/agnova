@@ -195,6 +195,22 @@ class QortiaMemoryBackend:
             )
         return items
 
+    def get(self, memory_id: str, *, max_chars: int | None = None) -> str:
+        """Not supported — Qortia has no HTTP endpoint to fetch one memory by
+        id (`/v1/recall`'s RecallRequest has no id field, and there is no
+        `GET /v1/memories/{id}`; confirmed against qortia's own router — see
+        `_RECALL_FILTER_FIELDS` above for recall()'s full filter surface).
+
+        Raises rather than returning "" so a caller can't mistake "not
+        supported on this backend" for "this memory has no content" —
+        unlike `reflect()`/`outcome()`, which really do have nothing to do
+        on the git backend and say so with a genuine empty/no-op result,
+        this operation has no honest empty answer to give."""
+        del memory_id, max_chars
+        raise NotImplementedError(
+            "qortia backend has no get-by-id endpoint — recall() is the only read path"
+        )
+
     def remember(self, items: list[dict[str, Any]]) -> list[MemoryItem]:
         if not items:
             return []

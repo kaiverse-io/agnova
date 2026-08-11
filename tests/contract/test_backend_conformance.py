@@ -191,6 +191,29 @@ def test_forget_removes_a_stored_memory(backend: MemoryBackend) -> None:
     assert not any(marker in h.content for h in backend.recall(marker))
 
 
+def test_get_returns_full_content_or_a_documented_not_implemented(backend: MemoryBackend) -> None:
+    """recall() only ever returns a bounded snippet; get() is the deliberate
+    way to fetch the rest of one hit. git supports it for real; qortia has
+    no get-by-id endpoint on the wire and must say so with a documented
+    NotImplementedError, not a silent empty string a caller could mistake
+    for 'this memory has no content'."""
+    marker = f"get-marker-{uuid.uuid4().hex[:8]}"
+    stored = backend.remember(
+        [
+            {
+                "content": f"a memory containing the {marker} token, several words long",
+                "type": "episodic",
+            }
+        ]
+    )
+
+    try:
+        content = backend.get(stored[0].id)
+    except NotImplementedError:
+        return
+    assert marker in content
+
+
 def test_outcome_is_reported_or_a_documented_no_op(backend: MemoryBackend) -> None:
     """qortia records an outcome (True); git has no confidence model to
     decay and says so (False) rather than crashing — every backend must

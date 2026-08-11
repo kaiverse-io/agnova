@@ -40,6 +40,24 @@ TOOLS = [
         },
     },
     {
+        "name": "get",
+        "description": (
+            "Fetch the full content behind a recall() hit, by the id recall() "
+            "returned (bare entry id or 'file:<name>'). recall() only ever "
+            "returns a bounded snippet — use this when a snippet looked "
+            "relevant but was cut off. Not supported on the qortia backend "
+            "(no get-by-id endpoint there); raises if the id doesn't exist."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+                "id": {"type": "string"},
+                "max_chars": {"type": "integer", "minimum": 1},
+            },
+        },
+    },
+    {
         "name": "remember",
         "description": (
             "Persist agent-chosen memories. Each item's `content` must be at least "
@@ -158,6 +176,12 @@ def _call_tool(backend: MemoryBackend, name: str, arguments: dict[str, Any]) -> 
     if name == "recall":
         hits = backend.recall(str(arguments.get("query", "")), arguments.get("filters"))
         return _result_text([{"id": h.id, "type": h.type, "content": h.content} for h in hits])
+    if name == "get":
+        max_chars = arguments.get("max_chars")
+        content = backend.get(
+            str(arguments.get("id", "")), max_chars=int(max_chars) if max_chars else None
+        )
+        return _result_text({"content": content})
     if name == "remember":
         items = arguments.get("items") or []
         if not isinstance(items, list):

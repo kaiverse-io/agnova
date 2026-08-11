@@ -337,6 +337,67 @@ def test_recall_still_finds_daily_log_content_with_no_entry_file(tmp_path: Path)
     )
 
 
+def test_get_returns_the_full_entry_recall_only_snippets(tmp_path: Path) -> None:
+    """get(id) with the id recall() handed back returns the whole stored
+    entry, not the bounded window recall() itself returns."""
+    backend = GitMemoryBackend(tmp_path)
+    long_content = "The canary check runs first. " + "Unrelated filler sentence. " * 50
+    backend.remember([{"id": "mem-1", "content": long_content}])
+
+    hits = backend.recall("canary check")
+    snippet = hits[0].content
+    full = backend.get(hits[0].id)
+
+    assert full.strip() == long_content.strip()
+    assert len(full) > len(snippet), "get() should return more than recall()'s snippet window"
+
+
+def test_get_by_daily_log_file_id_returns_the_whole_file(tmp_path: Path) -> None:
+    """get('file:<name>') — the id recall() mints for MEMORY.md and daily
+    logs — returns that whole file, same as the entry-id path does for
+    entries/<id>.md."""
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir(parents=True)
+    text = "# 2026-08-11\n\n- freeform note: the canary check flapped twice overnight\n"
+    (memory_dir / "2026-08-11.md").write_text(text, encoding="utf-8")
+    backend = GitMemoryBackend(tmp_path)
+
+    hits = backend.recall("canary check")
+
+    assert backend.get(hits[0].id) == text
+
+
+def test_get_max_chars_never_exceeds_budget_even_when_marker_does_not_fit(
+    tmp_path: Path,
+) -> None:
+    """A truncation marker that's itself longer than max_chars must not push
+    the result over budget — 'never exceed' outranks 'always explain',
+    same call context()'s own budget path already makes."""
+    backend = GitMemoryBackend(tmp_path)
+    backend.remember([{"id": "mem-1", "content": "word " * 200}])
+
+    for max_chars in (1, 5, 20, 39, 40, 100):
+        out = backend.get("mem-1", max_chars=max_chars)
+        assert len(out) <= max_chars, f"max_chars={max_chars} but got {len(out)} chars back"
+
+
+def test_get_unknown_id_raises(tmp_path: Path) -> None:
+    backend = GitMemoryBackend(tmp_path)
+
+    with pytest.raises(ValueError):
+        backend.get("no-such-memory")
+
+
+def test_get_rejects_path_traversal_via_file_prefix(tmp_path: Path) -> None:
+    """The 'file:' id form is reachable with a caller-supplied string via
+    the MCP tool surface, not just recall()'s own output — a '../' must be
+    rejected, not resolved outside memory_dir/home."""
+    backend = GitMemoryBackend(tmp_path)
+
+    with pytest.raises(ValueError):
+        backend.get("file:../../../etc/passwd")
+
+
 def test_recall_ranks_results(tmp_path: Path) -> None:
     """Recency + match count + section depth beats first-file-wins ordering.
 

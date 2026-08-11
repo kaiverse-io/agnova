@@ -91,6 +91,16 @@ def _without_entry_pointers(text: str, entry_ids: set[str]) -> str:
     return "".join(kept)
 
 
+def _entry_content(text: str) -> str:
+    """Strip an entry file's `---\\nid: ...\\ntype: ...\\n---\\n\\n` frontmatter, written by
+    remember() (see its `body = f"---\\nid: {mid}..."` line), leaving just the stored content."""
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        if end != -1:
+            return text[end + len("\n---\n") :].strip("\n")
+    return text
+
+
 class GitMemoryBackend:
     def __init__(self, home: Path) -> None:
         self.home = home.resolve()
@@ -187,6 +197,60 @@ class GitMemoryBackend:
             hits.append(MemoryItem(id=mid, content=snippet, type=DEFAULT_MEMORY_TYPE))
             total_chars += len(snippet)
         return hits
+
+    def get(self, memory_id: str, *, max_chars: int | None = None) -> str:
+        """The full content behind one recall() hit — recall() never returns
+        more than a snippet window (see `_snippet`), and until this method
+        there was no way to deliberately ask for the rest: an agent that
+        found something relevant but truncated had no next step short of
+        re-querying and hoping a narrower query returned a bigger window of
+        the same file.
+
+        Accepts either id shape recall() hands back: a bare entry id
+        (`entries/<id>.md`, frontmatter stripped before returning) or the
+        `file:<name>` form used for MEMORY.md and daily logs (returned
+        as-is — those files have no frontmatter to strip). Raises ValueError
+        for anything that doesn't resolve to a real file, same as `_safe_id`
+        already does for a malformed id — one exception type covers "your id
+        was rejected" for any reason.
+
+        `max_chars` truncates with a trailing marker rather than a silent
+        cut — a caller that asked for the whole entry and got a half-sentence
+        with no indication anything was dropped can't tell truncation from
+        the entry actually ending there.
+        """
+        if memory_id.startswith("file:"):
+            name = memory_id[len("file:") :]
+            # Mirrors _matching_files' two non-entry sources: MEMORY.md lives
+            # beside `home`, everything else "file:"-shaped is a daily log
+            # inside memory_dir — the same split recall() draws when minting
+            # this id in the first place. `id` reaches here as a caller-
+            # supplied string via the MCP tool surface, not just recall()'s
+            # own output, so resolve()+is_relative_to() rejects a `../` (or
+            # symlink) escape rather than trusting the literal path parts.
+            path = self.memory_md if name == self.memory_md.name else self.memory_dir / name
+            resolved = path.resolve()
+            allowed_dir = self.home if path is self.memory_md else self.memory_dir
+            if not resolved.is_relative_to(allowed_dir.resolve()) or not resolved.is_file():
+                raise ValueError(f"no such memory: {memory_id!r}")
+            content = resolved.read_text(encoding="utf-8", errors="replace")
+        else:
+            mid = self._safe_id(memory_id)
+            path = self.entries_dir / f"{mid}.md"
+            if not path.is_file():
+                raise ValueError(f"no such memory: {memory_id!r}")
+            content = _entry_content(path.read_text(encoding="utf-8", errors="replace"))
+
+        if max_chars is None or max_chars <= 0 or len(content) <= max_chars:
+            return content
+        marker = "\n[... truncated to fit max_chars ...]"
+        if max_chars <= len(marker):
+            # The marker itself doesn't fit: "never exceed budget" outranks
+            # "always explain" (same call _fill_budget makes for context()),
+            # so an extremely tight max_chars comes back silently truncated
+            # rather than over budget.
+            return content[:max_chars]
+        return content[: max_chars - len(marker)].rstrip() + marker
 
     def remember(self, items: list[dict[str, Any]]) -> list[MemoryItem]:
         self.entries_dir.mkdir(parents=True, exist_ok=True)
