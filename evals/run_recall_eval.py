@@ -40,8 +40,13 @@ from agnova.memory.git_backend import GitMemoryBackend  # noqa: E402
 # Regression floors — set 5% below the measured baseline (Qortia REH's own
 # convention, evals/README.md in the qortia repo). First real run on this
 # 10-case dataset: case_pass_rate=1.000, recall_at_5=0.889, mrr=0.481.
+#
+# MRR is now 0.833: suppressing the daily log's duplicate of each entry
+# (git_backend._without_entry_pointers) moved ground truth from rank 2 to rank 1
+# in six cases. Floor ratcheted with it — like the coverage floor, it only ever
+# goes up, so the duplicate can't quietly come back.
 RECALL_AT_5_FLOOR: float | None = 0.80
-MRR_FLOOR: float | None = 0.40
+MRR_FLOOR: float | None = 0.79
 
 
 def _seed_memory(backend: GitMemoryBackend, mem_id: str, spec: dict[str, Any]) -> str:

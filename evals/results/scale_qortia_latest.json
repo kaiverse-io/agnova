@@ -1,0 +1,17 @@
+{
+  "dataset": "beir/fiqa-2018",
+  "backend": "qortia",
+  "runs": [
+    {
+      "size": 276,
+      "query_style": "full-question",
+      "seed_seconds": 234.54624789999798,
+      "recall_at_5": 0.26,
+      "mrr": 0.217488727333585,
+      "precision_at_budget": 0.05472984118636907,
+      "chars_returned": 38960.71,
+      "zero_result_rate": 0.0,
+      "ms_per_query": 85.71490001981147
+    }
+  ]
+}
