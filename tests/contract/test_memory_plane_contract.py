@@ -291,6 +291,52 @@ def test_recall_returns_snippets_not_whole_documents(tmp_path: Path) -> None:
     )
 
 
+def test_recall_does_not_return_the_daily_logs_copy_of_an_entry(tmp_path: Path) -> None:
+    """remember() writes twice; recall() must not return both copies.
+
+    Each memory lands in `entries/<id>.md` *and* as a `- [<id>] …` line in the
+    day's log. The log accumulates every memory stored that day (so it wins on
+    match count) and is rewritten on each remember() (so it wins on mtime),
+    which put the aggregate duplicate above the entry it duplicates on both
+    ranking keys — spending the caller's budget on the same content twice.
+    evals/run_recall_eval.py scored this at MRR 0.481; suppressing the
+    duplicate took it to 0.833.
+    """
+    backend = GitMemoryBackend(tmp_path)
+    backend.remember([{"id": "mem-alpha", "content": "The canary check runs before the rollout."}])
+    backend.remember([{"id": "mem-beta", "content": "Unrelated note on invoice reconciliation."}])
+
+    hits = backend.recall("canary check")
+    ids = [h.id for h in hits]
+
+    assert ids, "expected a hit"
+    assert ids[0] == "mem-alpha", f"entry should rank first, got {ids}"
+    assert not [i for i in ids if i.startswith("file:")], (
+        f"the daily log's duplicate of an entry is still being returned: {ids}"
+    )
+
+
+def test_recall_still_finds_daily_log_content_with_no_entry_file(tmp_path: Path) -> None:
+    """Suppressing duplicates must not blind recall to log-only notes.
+
+    Only lines pointing at an entry recall() already scans are dropped — a
+    daily log written by hand (never through remember()) has no `- [<id>] `
+    pointer backing it and must still match.
+    """
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir(parents=True)
+    (memory_dir / "2026-08-11.md").write_text(
+        "# 2026-08-11\n\n- freeform note: the canary check flapped twice overnight\n",
+        encoding="utf-8",
+    )
+
+    hits = GitMemoryBackend(tmp_path).recall("canary check")
+
+    assert [h.id for h in hits] == ["file:2026-08-11.md"], (
+        f"log-only content stopped matching: {[h.id for h in hits]}"
+    )
+
+
 def test_recall_ranks_results(tmp_path: Path) -> None:
     """Recency + match count + section depth beats first-file-wins ordering.
 

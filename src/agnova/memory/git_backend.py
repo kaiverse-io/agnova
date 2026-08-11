@@ -11,6 +11,8 @@ from typing import Any
 from agnova.memory import DEFAULT_MEMORY_TYPE, MemoryItem
 
 _ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+# The daily-log pointer line remember() writes and forget() strips: `- [<id>] <content>`.
+_DAILY_POINTER_RE = re.compile(r"^- \[([a-zA-Z0-9_-]{1,64})\] ")
 
 _SNIPPET_WINDOW = 120  # chars of context kept on each side of a match
 _SNIPPET_MAX_MATCHES = (
@@ -62,6 +64,33 @@ def _snippet(text: str, terms: list[str], *, window: int = _SNIPPET_WINDOW) -> t
     return joined, len(matches)
 
 
+def _without_entry_pointers(text: str, entry_ids: set[str]) -> str:
+    """Drop the daily log's pointer lines for memories that have their own entry file.
+
+    remember() writes each memory twice — the atomic `entries/<id>.md` and a
+    `- [<id>] <content>` line in that day's log — and recall() scans both. The
+    day's log is therefore a strictly larger duplicate of every memory stored
+    that day: it accumulates more matches than any single entry *and* is
+    rewritten (so carries the newest mtime) on every remember(), so it won
+    both ranking keys by construction. Recall spent its budget returning the
+    same content twice, aggregate copy first.
+
+    evals/run_recall_eval.py measures this as the dominant retrieval cost — far
+    more than the ranking function: ground truth sat at rank 2 behind the daily
+    log in 7 of the 8 cases that weren't already perfect, and removing the
+    duplicate took MRR from 0.481 to 0.833. Lines the log holds on its own
+    (notes never written through remember()) still match normally.
+    """
+    if not entry_ids:
+        return text
+    kept = [
+        line
+        for line in text.splitlines(keepends=True)
+        if not ((m := _DAILY_POINTER_RE.match(line)) and m.group(1) in entry_ids)
+    ]
+    return "".join(kept)
+
+
 class GitMemoryBackend:
     def __init__(self, home: Path) -> None:
         self.home = home.resolve()
@@ -87,6 +116,40 @@ class GitMemoryBackend:
             return text[:budget]
         return text
 
+    def _matching_files(self, terms: list[str]) -> list[tuple[int, float, str, str]]:
+        """Every searchable file that matches all `terms`, as (count, mtime, id, snippet).
+
+        Scans MEMORY.md, the daily logs and the entry files. A daily log is
+        read with its pointer lines to entries removed — see
+        `_without_entry_pointers` for why the duplicate has to go.
+        """
+        paths: list[Path] = []
+        if self.memory_md.is_file():
+            paths.append(self.memory_md)
+        if self.memory_dir.is_dir():
+            paths.extend(self.memory_dir.glob("*.md"))
+            if self.entries_dir.is_dir():
+                paths.extend(self.entries_dir.glob("*.md"))
+        entry_ids = (
+            {p.stem for p in self.entries_dir.glob("*.md")} if self.entries_dir.is_dir() else set()
+        )
+
+        matches: list[tuple[int, float, str, str]] = []
+        for path in paths:
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if path.parent == self.memory_dir:
+                text = _without_entry_pointers(text, entry_ids)
+            snippet, count = _snippet(text, terms)
+            if count == 0:
+                continue
+            mid = path.stem if path.parent == self.entries_dir else f"file:{path.name}"
+            matches.append((count, mtime, mid, snippet))
+        return matches
+
     def recall(self, query: str, filters: dict[str, Any] | None = None) -> list[MemoryItem]:
         """Snippet windows around each match, ranked by match count then
         recency — never a whole file. The old behaviour returned
@@ -105,26 +168,7 @@ class GitMemoryBackend:
         terms = re.findall(r"\w+", query.lower())
         if not terms:
             return []
-        paths: list[Path] = []
-        if self.memory_md.is_file():
-            paths.append(self.memory_md)
-        if self.memory_dir.is_dir():
-            paths.extend(self.memory_dir.glob("*.md"))
-            if self.entries_dir.is_dir():
-                paths.extend(self.entries_dir.glob("*.md"))
-
-        scored: list[tuple[int, float, str, str]] = []  # (match_count, mtime, id, snippet)
-        for path in paths:
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-                mtime = path.stat().st_mtime
-            except OSError:
-                continue
-            snippet, count = _snippet(text, terms)
-            if count == 0:
-                continue
-            mid = path.stem if path.parent == self.entries_dir else f"file:{path.name}"
-            scored.append((count, mtime, mid, snippet))
+        scored = self._matching_files(terms)
 
         # Most matches first; among ties, most recently modified first —
         # recency as a proxy for relevance when match count doesn't decide.
