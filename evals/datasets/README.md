@@ -22,21 +22,10 @@ Used for: `run_scale_eval.py` (git-backend recall, baseline vs BM25) and
 `run_scale_eval_qortia.py` (Qortia semantic recall), scored against the *same* 100
 sampled queries and relevance judgements so the two are comparable.
 
-## wikiann/
-
-WikiANN (PAN-X) — Wikipedia-derived named-entity tagging, `PER`/`ORG`/`LOC` spans in
-IOB2, per-language `test` splits.
-
-- Source: https://huggingface.co/datasets/unimelb-nlp/wikiann (fetched via the public
-  `datasets-server.huggingface.co/rows` JSON API — no `datasets` library dependency)
-- License: ODC-BY (per the HF dataset card)
-- Vendored: 2026-08-11
-- Languages kept: `hi`, `bn`, `ta`, `te`, `mr` (qortia's `_INDIC_MODEL` routing table,
-  `qortia/src/qortia/knowledge.py`) + `en` (qortia's non-Indic default path) + one
-  control language outside both (`de`), to exercise the `ner_lang_unsupported` fallback
-  path rather than only the two designed-for routes.
-
-Used for: the qortia multilingual-NER eval (entity extraction against `PER→PERSON`,
-`ORG→ORG`, `LOC→GPE` — the same map `_INDIC_LABEL_MAP` in `knowledge.py` uses), not yet
-run against the git backend (no NER exists there — see the memory note on why a
-model-backed NER doesn't belong in agnova's process).
+No `wikiann/` here: an earlier version of this directory vendored it for a
+qortia-internal NER eval (`run_ner_eval_qortia.py`) that had nothing to do with
+agnova's own `MemoryBackend` (the git backend has no NER at all) and reached
+into qortia's Postgres via `docker exec` from across the repo boundary AGENTS.md
+reserves for HTTP only. Moved to qortia's own `evals/` (`run_ner_eval.py`),
+which now runs it over HTTP against qortia's own eval-mode routes with no
+database reach-around needed.
