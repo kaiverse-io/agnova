@@ -59,6 +59,26 @@ Stock `buzz-acp` — no fork, no patched build, no certificates. Three in-flight
 - **DNA** — fail-closed boot integrity against an operator-owned hash
 - **Scaffold** — new agent = env file + home directory + `runtime.lock` pin
 
+## Agent repositories
+
+An agent that outgrows a directory here gets its own repository from
+`agnova init <name>`. That repository holds identity and memory only — no
+runtime code. It declares the agnova build it runs on in `runtime.lock`
+(`repo`, `ref`, `sha`), and consumes agnova as an installed package:
+
+```bash
+# Environment setup script, once — bootstraps *some* agnova from the pin:
+pip install "agnova @ git+https://github.com/kaiverse-io/agnova@$(sed -n 's/^sha = //p' runtime.lock)"
+
+agnova runtime status    # pinned vs. installed
+agnova runtime install   # install exactly the pin
+agnova runtime check     # pinned vs. upstream main
+```
+
+Moving the pin is a reviewed commit to `runtime.lock`, never an automatic update.
+Never vendor a copy of `agnova/` into the agent repository: it shadows the
+installed package on `sys.path` and drifts silently.
+
 ## Memory
 
 Agnova persists an agent's memory; it never decides what belongs in it. With no checkpoint paths configured it does nothing on purpose.
