@@ -98,6 +98,7 @@ Claude Code needs no `ANTHROPIC_API_KEY`: the adapter wraps the Agent SDK and in
 - [Design](docs/explanation/design.md) — motivation, architecture, trade-offs
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — component contracts
 - [ADR-001](docs/decisions/adr-001-front-door.md) — transport front door, not a protocol shim
+- [ADR-004](docs/decisions/adr-004-adapter-seam-deferred.md) — adapter seam deferred; runtime-owned names carry no `BUZZ_` prefix
 - [Session lifetime](docs/explanation/session-lifetime.md) — idle, reclaim, and what nothing here can prevent
 - [Set up the environment](docs/how-to/set-up-the-environment.md)
 - [Run a new agent](docs/how-to/run-a-new-agent.md)
