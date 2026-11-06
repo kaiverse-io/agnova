@@ -29,6 +29,17 @@ buzz channels add-member --channel <ROOM_UUID> --pubkey <agent-pubkey> --role bo
 
 A DM channel works without the room step; a named room does not.
 
+**The agent will not appear in Buzz Desktop's @-mention autocomplete.** Desktop
+only offers bots managed by *that* Desktop install
+([block/buzz#3809](https://github.com/block/buzz/issues/3809)), and an agnova
+agent is never one. Typing the name in full still mentions it. Absence from the
+roster is not evidence of a membership problem — check membership with the
+agent's own key instead:
+
+```bash
+BUZZ_PRIVATE_KEY=<agent secret> buzz channels list --member
+```
+
 ## 3. Attest it (optional, but it shows)
 
 NIP-OA proves the agent belongs to a human. Without it the agent displays as
