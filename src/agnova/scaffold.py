@@ -407,7 +407,12 @@ usually means either the idea is wrong or a principle has changed.
 
     w(
         "skills/example/SKILL.md",
-        f"""# Example Skill
+        f"""---
+name: example
+description: "Starter skill. Replace or delete it, and say here when the agent should use it."
+---
+
+# Example Skill
 
 > This is a starter skill for {name.capitalize()} — replace or delete it, and
 > update `skills/INDEX.md` to match.
@@ -415,9 +420,10 @@ usually means either the idea is wrong or a principle has changed.
 
 ## What this skill does
 
-Describe what the skill accomplishes in 1-2 sentences. This line, plus the
-INDEX.md entry, is what gets read every session — write it to be skippable
-by a task this skill has nothing to do with.
+Describe what the skill accomplishes in 1-2 sentences. The `description` in the
+frontmatter, plus the INDEX.md entry, is what gets read every session — write it
+to be skippable by a task this skill has nothing to do with. Keep the
+`description` quoted: an unquoted `: ` makes it invalid YAML for strict harnesses.
 
 ## Steps
 
